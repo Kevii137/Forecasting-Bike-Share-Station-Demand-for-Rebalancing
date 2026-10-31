@@ -1,0 +1,18 @@
+# Direct dependencies for the pipeline and backend. Pinned versions live in requirements.lock.
+# Regenerate with: uv pip compile requirements.in -o requirements.lock --python-version 3.12
+pyspark==3.5.*
+pyarrow
+pandas<3  # PySpark 3.5 predates pandas 3 and warns on removed APIs
+numpy
+lightgbm
+scikit-learn
+ray[tune]==2.59.*
+mlflow
+dvc
+fastapi
+uvicorn
+prometheus-client
+requests
+pyyaml
+pytest
+ruff

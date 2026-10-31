@@ -1,0 +1,23 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets and local environment
+.env
+*.token
+
+# Data and models are versioned by DVC and MLflow, not Git
+/data/
+/models/
+/mlruns/
+/mlartifacts/
+mlflow.db
+
+# Runtime output
+/logs/
+spark-warehouse/
+metastore_db/
+derby.log

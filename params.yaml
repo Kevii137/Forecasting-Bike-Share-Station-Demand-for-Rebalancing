@@ -1,0 +1,21 @@
+# Central configuration. DVC stages read these values, so changing one reruns the affected stages.
+data:
+  first_month: "2025-06"   # 8 weeks of history before training starts, and all CHI-format station IDs
+  last_month: "2026-09"
+
+split:                     # Decision D4: chronological, inclusive of both months
+  train: ["2025-08", "2025-12"]
+  validation: ["2026-01", "2026-01"]
+  test: ["2026-02", "2026-02"]
+  replay: ["2026-03", "2026-09"]
+
+forecast:                  # Decision D3
+  horizons: [1, 2, 3]
+  targets: [pickups, dropoffs]
+
+stations:                  # Decision D2
+  min_trips_per_day: 5
+  trailing_days: 28
+  allowed_types: [classic]
+
+seed: 42
