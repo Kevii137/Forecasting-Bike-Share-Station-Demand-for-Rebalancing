@@ -1,0 +1,167 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: PYTHONPATH=src python -m bikeshare.data.ingest
+    deps:
+    - path: src/bikeshare/data/ingest.py
+      hash: md5
+      md5: 5a960594ceddd06de4f0d98eb497efaf
+      size: 2761
+    params:
+      params.yaml:
+        data:
+          first_month: 2025-06
+          last_month: 2026-09
+    outs:
+    - path: data/raw
+      hash: md5
+      md5: 0eecfbd3db389e1a6c6508aadaaf6405.dir
+      size: 337651407
+      nfiles: 17
+  clean:
+    cmd: PYTHONPATH=src python -m bikeshare.data.clean
+    deps:
+    - path: data/raw
+      hash: md5
+      md5: 0eecfbd3db389e1a6c6508aadaaf6405.dir
+      size: 337651407
+      nfiles: 17
+    - path: src/bikeshare/data/clean.py
+      hash: md5
+      md5: 9b026c1a1e5d46caea120d97a53fd9ce
+      size: 4281
+    - path: src/bikeshare/spark.py
+      hash: md5
+      md5: 7c134c4e67e0e17b44781b1c75b627c8
+      size: 1491
+    params:
+      params.yaml:
+        validation:
+          max_rejected_share: 0.1
+    outs:
+    - path: data/interim/trips
+      hash: md5
+      md5: 3ae5715a34c3f0e0e0e6ed31748a8111.dir
+      size: 455737648
+      nfiles: 1088
+    - path: reports/data_quality.json
+      hash: md5
+      md5: 3a19e14a0d68af7f6e9ac2bb63364a77
+      size: 258
+  stations:
+    cmd: PYTHONPATH=src python -m bikeshare.data.stations
+    deps:
+    - path: data/interim/trips
+      hash: md5
+      md5: 3ae5715a34c3f0e0e0e6ed31748a8111.dir
+      size: 455737648
+      nfiles: 1088
+    - path: data/raw
+      hash: md5
+      md5: 0eecfbd3db389e1a6c6508aadaaf6405.dir
+      size: 337651407
+      nfiles: 17
+    - path: src/bikeshare/data/stations.py
+      hash: md5
+      md5: ca848a577f9f1ceffa8a41aec801dff7
+      size: 6862
+    - path: src/bikeshare/spark.py
+      hash: md5
+      md5: 7c134c4e67e0e17b44781b1c75b627c8
+      size: 1491
+    params:
+      params.yaml:
+        stations.merge_distance_metres: 100
+    outs:
+    - path: data/interim/station_name_map.parquet
+      hash: md5
+      md5: bcaacb6cf4c3caf17ff50e3c4b245814
+      size: 56387
+    - path: data/interim/stations.parquet
+      hash: md5
+      md5: a003c30b1924f518f51524ac30f48113
+      size: 111226
+    - path: reports/stations.json
+      hash: md5
+      md5: deaedea206f7afa5aa072b3c1cbaff84
+      size: 190
+  panel:
+    cmd: PYTHONPATH=src python -m bikeshare.data.panel
+    deps:
+    - path: data/interim/station_name_map.parquet
+      hash: md5
+      md5: bcaacb6cf4c3caf17ff50e3c4b245814
+      size: 56387
+    - path: data/interim/stations.parquet
+      hash: md5
+      md5: a003c30b1924f518f51524ac30f48113
+      size: 111226
+    - path: data/interim/trips
+      hash: md5
+      md5: 3ae5715a34c3f0e0e0e6ed31748a8111.dir
+      size: 455737648
+      nfiles: 1088
+    - path: src/bikeshare/data/panel.py
+      hash: md5
+      md5: 8bc73e70527aa42d0240fb52919b727b
+      size: 4550
+    - path: src/bikeshare/spark.py
+      hash: md5
+      md5: 7c134c4e67e0e17b44781b1c75b627c8
+      size: 1491
+    outs:
+    - path: data/processed/panel
+      hash: md5
+      md5: 5291b7f1823c8bdb343619e0c2d1f409.dir
+      size: 34633584
+      nfiles: 240
+    - path: reports/panel.json
+      hash: md5
+      md5: f8b117ef2c0466cbfa1bdf67608dc4b6
+      size: 1514
+  features:
+    cmd: PYTHONPATH=src python -m bikeshare.data.build_features
+    deps:
+    - path: data/interim/stations.parquet
+      hash: md5
+      md5: a003c30b1924f518f51524ac30f48113
+      size: 111226
+    - path: data/processed/panel
+      hash: md5
+      md5: 5291b7f1823c8bdb343619e0c2d1f409.dir
+      size: 34633584
+      nfiles: 240
+    - path: src/bikeshare/data/build_features.py
+      hash: md5
+      md5: 272aa2c7cf04f621cd253691a5b5bb46
+      size: 3475
+    - path: src/bikeshare/features.py
+      hash: md5
+      md5: 355ee87a7da9f7ac063166df852aed0d
+      size: 3363
+    - path: src/bikeshare/spark.py
+      hash: md5
+      md5: 7c134c4e67e0e17b44781b1c75b627c8
+      size: 1491
+    params:
+      params.yaml:
+        forecast.horizons:
+        - 1
+        - 2
+        - 3
+        split.train:
+        - 2025-08
+        - 2025-12
+        stations.allowed_types:
+        - classic
+        stations.min_trips_per_day: 5
+    outs:
+    - path: data/processed/features
+      hash: md5
+      md5: b6dcac9441ff0664351728a275abee66.dir
+      size: 207208326
+      nfiles: 198
+    - path: reports/features.json
+      hash: md5
+      md5: 118c63a6ecf68412f627d0428756f793
+      size: 1023

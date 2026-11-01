@@ -94,6 +94,13 @@ Measured on 2026-10-31 from Divvy trip files (Aug 2025, Jan 2026, Aug 2026, with
 Findings from Milestone 0 testing.
 
 - **Spark workers:** Spark starts workers with `python3` from PATH, which is 3.14 here, so `get_spark` points them at the project interpreter.
-- **Timestamps:** Spark runs in UTC so Divvy times stay wall-clock labels. A Chicago session zone would hit hours that do not exist on the spring daylight-saving day. Whether Divvy files are truly naive Chicago time is to be verified in Milestone 1.
+- **Timestamps:** Spark runs in UTC so Divvy times stay wall-clock labels. A Chicago session zone would hit hours that do not exist on the spring daylight-saving day. Divvy times are confirmed as Chicago local: 2026-03-08 has no trips in the 02:00 hour.
 - **Arrow:** enabled because the non-Arrow `toPandas()` path crashes on timestamps on this stack.
 - **pandas:** pinned below 3 because PySpark 3.5 predates it. This pin was not the cause of the timestamp failure.
+
+Findings from Milestone 1.
+
+- **Station identity:** IDs are reused across sites and one site has several labels, so neither ID nor name works alone. Names are normalised, then merged only if they share an ID and sit within 100 m. This merged `Streeter Dr & Grand Ave` into `Navy Pier` and kept moved stations separate. 2,188 raw labels became 2,037 stations.
+- **Timezone leak:** `F.lit()` on a Python datetime applies the machine's time zone, which let 6,840 July rows through on an IST machine. Date filtering now happens in pandas on plain labels.
+- **Memory:** the first design ran out of memory on the 14 GB machine, and the kernel killed Spark and the editor twice. The features stage now filters inside the pandas function, so rows that would be dropped never return to the JVM, and Spark is capped at 6 cores and a 4 GB driver. Measured peak after the fix: 6.8 GB for the pipeline, with 1.3 GB of the machine still available.
+- **Alert frequency:** net flow of at least half of capacity occurs in 0.78% of classic station-hours over 3 hours and 2.08% over 6 hours (16 months, all classic stations). With a 3-hour horizon, a ranked list is likely more useful than a fixed alert threshold. To be decided in Milestone 4.

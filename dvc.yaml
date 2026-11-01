@@ -1,0 +1,69 @@
+# Run with the project venv active: dvc repro
+stages:
+  ingest:
+    cmd: PYTHONPATH=src python -m bikeshare.data.ingest
+    deps:
+      - src/bikeshare/data/ingest.py
+    params:
+      - data
+    outs:
+      - data/raw
+  clean:
+    cmd: PYTHONPATH=src python -m bikeshare.data.clean
+    deps:
+      - data/raw
+      - src/bikeshare/data/clean.py
+      - src/bikeshare/spark.py
+    params:
+      - validation
+    outs:
+      - data/interim/trips
+    metrics:
+      - reports/data_quality.json:
+          cache: false
+  stations:
+    cmd: PYTHONPATH=src python -m bikeshare.data.stations
+    deps:
+      - data/interim/trips
+      - data/raw
+      - src/bikeshare/data/stations.py
+      - src/bikeshare/spark.py
+    params:
+      - stations.merge_distance_metres
+    outs:
+      - data/interim/stations.parquet
+      - data/interim/station_name_map.parquet
+    metrics:
+      - reports/stations.json:
+          cache: false
+  panel:
+    cmd: PYTHONPATH=src python -m bikeshare.data.panel
+    deps:
+      - data/interim/trips
+      - data/interim/stations.parquet
+      - data/interim/station_name_map.parquet
+      - src/bikeshare/data/panel.py
+      - src/bikeshare/spark.py
+    outs:
+      - data/processed/panel
+    metrics:
+      - reports/panel.json:
+          cache: false
+  features:
+    cmd: PYTHONPATH=src python -m bikeshare.data.build_features
+    deps:
+      - data/processed/panel
+      - data/interim/stations.parquet
+      - src/bikeshare/features.py
+      - src/bikeshare/data/build_features.py
+      - src/bikeshare/spark.py
+    params:
+      - forecast.horizons
+      - split.train
+      - stations.min_trips_per_day
+      - stations.allowed_types
+    outs:
+      - data/processed/features
+    metrics:
+      - reports/features.json:
+          cache: false

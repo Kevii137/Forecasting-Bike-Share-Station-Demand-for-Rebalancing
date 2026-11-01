@@ -1,0 +1,11 @@
+{
+  "raw_labels": 2188,
+  "stations": 2037,
+  "with_capacity": 1968,
+  "trip_share_with_capacity": 0.9913,
+  "by_type": {
+    "classic": 1169,
+    "lightweight": 799,
+    "unknown": 69
+  }
+}

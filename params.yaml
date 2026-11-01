@@ -17,5 +17,9 @@ stations:                  # Decision D2
   min_trips_per_day: 5
   trailing_days: 28
   allowed_types: [classic]
+  merge_distance_metres: 100
+
+validation:
+  max_rejected_share: 0.10  # stop the pipeline if more rows than this are rejected
 
 seed: 42

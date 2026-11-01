@@ -5,7 +5,7 @@ import sys
 from pyspark.sql import SparkSession
 
 
-def get_spark(app_name: str, master: str = "local[*]", driver_memory: str = "6g") -> SparkSession:
+def get_spark(app_name: str, master: str = "local[6]", driver_memory: str = "4g") -> SparkSession:
     """Create a local Spark session whose workers use this interpreter.
 
     Without this, Spark starts workers with the `python3` on PATH. On a machine whose
@@ -17,6 +17,9 @@ def get_spark(app_name: str, master: str = "local[*]", driver_memory: str = "6g"
 
     Arrow is enabled because the non-Arrow toPandas() path localises timestamps with
     tzlocal(), which crashes on this stack.
+
+    The core and memory limits are deliberate. With every core and a 6 GB driver, the
+    features stage exhausted a 14 GB machine and the kernel killed Spark and the editor.
     """
     os.environ["PYSPARK_PYTHON"] = sys.executable
     os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
@@ -25,6 +28,7 @@ def get_spark(app_name: str, master: str = "local[*]", driver_memory: str = "6g"
         .master(master)
         .config("spark.driver.memory", driver_memory)
         .config("spark.sql.session.timeZone", "UTC")
+        .config("spark.sql.shuffle.partitions", "32")
         .config("spark.sql.execution.arrow.pyspark.enabled", "true")
         .getOrCreate()
     )
