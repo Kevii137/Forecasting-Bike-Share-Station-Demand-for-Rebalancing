@@ -8,6 +8,7 @@
       "bagging_fraction": 0.7249466565528164,
       "lambda_l2": 2.1332374807314576
     },
+    "val_poisson_deviance": 0.7549768817189594,
     "val_wape": 0.9959514222369028,
     "best_iteration": 2163
   },
@@ -20,6 +21,7 @@
       "bagging_fraction": 0.7249466565528164,
       "lambda_l2": 2.1332374807314576
     },
+    "val_poisson_deviance": 0.7565987259196734,
     "val_wape": 0.9998944975525387,
     "best_iteration": 1826
   }

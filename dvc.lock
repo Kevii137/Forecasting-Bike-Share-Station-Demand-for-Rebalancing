@@ -179,12 +179,12 @@ stages:
       size: 1683
     - path: src/bikeshare/modeling/metrics.py
       hash: md5
-      md5: f80cc4a8075f7b860fa6be63a63386c1
-      size: 3303
+      md5: 0465e5ac4ed7947af710d70b62d1c5a2
+      size: 3446
     - path: src/bikeshare/modeling/tune.py
       hash: md5
-      md5: b209e232a5f9049e3b2c5f9020e83243
-      size: 5578
+      md5: 4de432a11f955b32f57e9be259b2b4ae
+      size: 5786
     params:
       params.yaml:
         model:
@@ -213,8 +213,8 @@ stages:
     outs:
     - path: reports/best_params.json
       hash: md5
-      md5: 8c6f362a7ccf7a5ab7d8e1eb6516df6f
-      size: 675
+      md5: 882bc578e4aec0579acc8d2ae7eb9370
+      size: 771
   train:
     cmd: PYTHONPATH=src python -m bikeshare.modeling.train
     deps:
@@ -225,12 +225,12 @@ stages:
       nfiles: 198
     - path: reports/best_params.json
       hash: md5
-      md5: 8c6f362a7ccf7a5ab7d8e1eb6516df6f
-      size: 675
+      md5: 882bc578e4aec0579acc8d2ae7eb9370
+      size: 771
     - path: src/bikeshare/modeling
       hash: md5
-      md5: c6a3c52568a40ee0cf246de458565bcd.dir
-      size: 59061
+      md5: 12a653acdb1df1175087b2d6bc8387c4.dir
+      size: 59817
       nfiles: 16
     params:
       params.yaml:
@@ -275,11 +275,15 @@ stages:
       md5: 243c1c0f6fd28c7d4b4718aecc4fb64e.dir
       size: 15374526
       nfiles: 3
+    - path: reports/importance.json
+      hash: md5
+      md5: 9abaab608d54dde3f2246769759738dc
+      size: 5549
     - path: reports/importance.png
       hash: md5
       md5: 85ee2e1713288e26ae5cba7709ac779e
       size: 107083
     - path: reports/metrics.json
       hash: md5
-      md5: b017c70507fc24b0d69eece7c7fecb78
+      md5: cf112cf0e1fd74117757e93a3ac4a735
       size: 13990

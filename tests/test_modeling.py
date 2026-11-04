@@ -1,5 +1,6 @@
 """Tests for metrics, baselines and the MLflow model wrapper."""
 import json
+import subprocess
 
 import lightgbm as lgb
 import mlflow
@@ -87,3 +88,26 @@ def test_pyfunc_rejects_missing_feature_columns(logged_model):
     model, features = logged_model
     with pytest.raises(ValueError, match="missing feature columns"):
         model.predict(features.drop(columns=["capacity"]).head(2))
+
+
+def test_lineage_ignores_files_the_pipeline_rewrites(tmp_path, monkeypatch):
+    from bikeshare.modeling.tracking import lineage_tags
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports" / "metrics.json").write_text("{}")
+    (tmp_path / "code.py").write_text("x = 1\n")
+    (tmp_path / "dvc.lock").write_text(
+        "stages:\n  features:\n    outs:\n    - path: data/processed/features\n      md5: abc\n")
+    git("init", "-q")
+    git("add", ".")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / "reports" / "metrics.json").write_text('{"a": 1}')
+    (tmp_path / "dvc.lock").write_text((tmp_path / "dvc.lock").read_text() + "# rerun\n")
+    assert lineage_tags()["git_dirty"] == "False"
+    (tmp_path / "code.py").write_text("x = 2\n")
+    assert lineage_tags()["git_dirty"] == "True"

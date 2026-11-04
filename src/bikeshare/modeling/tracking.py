@@ -9,6 +9,9 @@ import yaml
 DEFAULT_TRACKING_URI = "http://127.0.0.1:5000"
 EXPERIMENT = "bikeshare-demand"
 DVC_LOCK = Path("dvc.lock")
+# Files the pipeline itself rewrites while `dvc repro` runs. Changes to them do not
+# mean the code or configuration differ from the commit.
+PIPELINE_WRITTEN = (":(exclude)dvc.lock", ":(exclude)reports")
 
 
 def start_tracking() -> None:
@@ -26,7 +29,7 @@ def _git(*args: str) -> str:
 
 
 def lineage_tags() -> dict[str, str]:
-    """Git commit, whether the code had uncommitted changes, and the DVC data version.
+    """Git commit, whether code or configuration had uncommitted changes, and the DVC data version.
 
     The data version is the hash DVC recorded for the feature output in dvc.lock.
     """
@@ -35,6 +38,7 @@ def lineage_tags() -> dict[str, str]:
                     if out["path"] == "data/processed/features")
     return {
         "git_commit": _git("rev-parse", "HEAD"),
-        "git_dirty": str(bool(_git("status", "--porcelain", "--untracked-files=no"))),
+        "git_dirty": str(bool(_git("status", "--porcelain", "--untracked-files=no",
+                                      "--", ".", *PIPELINE_WRITTEN))),
         "dvc_features_md5": features["md5"],
     }
