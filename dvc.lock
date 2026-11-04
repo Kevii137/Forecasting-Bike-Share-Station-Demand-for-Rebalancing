@@ -229,8 +229,8 @@ stages:
       size: 771
     - path: src/bikeshare/modeling
       hash: md5
-      md5: 12a653acdb1df1175087b2d6bc8387c4.dir
-      size: 59817
+      md5: b0a08cac482d9cb81f2357fe4707e7df.dir
+      size: 60235
       nfiles: 16
     params:
       params.yaml:
@@ -285,5 +285,5 @@ stages:
       size: 107083
     - path: reports/metrics.json
       hash: md5
-      md5: cf112cf0e1fd74117757e93a3ac4a735
+      md5: cfdee6bf2e9c9706bc6f66f594c303d7
       size: 13990

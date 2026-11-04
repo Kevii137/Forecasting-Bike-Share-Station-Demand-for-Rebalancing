@@ -119,3 +119,5 @@ Findings from Milestone 2.
 - **Poisson deviance for baselines:** both baselines sometimes forecast exactly zero for an hour that had trips. The deviance then depends on the numerical floor of 1e-9, so baseline deviance (about 11) cannot be compared with the model's (0.94). Comparisons use WAPE, MAE and net flow MAE.
 - **Memory:** tuning and training peaked at 4.9 GB inside the 9 GB cap, with no out-of-memory kills.
 
+- **Reproducibility:** a full rerun of `tune` and `train` matched the first run exactly: identical test metrics, the same chosen configurations and stopping rounds, and a byte-identical model file.
+- **Lineage flag:** `dvc repro` deletes stage outputs and rewrites `dvc.lock` while it runs, so every run was first tagged as uncommitted code. The dirty check now ignores `dvc.lock` and `reports/`, which the pipeline writes, and still flags changes to code or configuration.
