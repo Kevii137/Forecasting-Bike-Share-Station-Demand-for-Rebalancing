@@ -67,3 +67,38 @@ stages:
     metrics:
       - reports/features.json:
           cache: false
+  tune:
+    cmd: PYTHONPATH=src python -m bikeshare.modeling.tune
+    deps:
+      - data/processed/features
+      - src/bikeshare/modeling/tune.py
+      - src/bikeshare/modeling/dataset.py
+      - src/bikeshare/modeling/metrics.py
+    params:
+      - model
+      - split
+      - seed
+    outs:
+      - reports/best_params.json:
+          cache: false
+  train:
+    cmd: PYTHONPATH=src python -m bikeshare.modeling.train
+    deps:
+      - data/processed/features
+      - reports/best_params.json
+      - src/bikeshare/modeling
+    params:
+      - model
+      - split
+      - evaluation
+      - seed
+    outs:
+      - models
+      - reports/importance.json:
+          cache: false
+    metrics:
+      - reports/metrics.json:
+          cache: false
+    plots:
+      - reports/importance.png:
+          cache: false

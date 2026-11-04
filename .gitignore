@@ -17,6 +17,7 @@ __pycache__/
 mlflow.db
 
 # Runtime output
+/ray_results/
 /logs/
 spark-warehouse/
 metastore_db/

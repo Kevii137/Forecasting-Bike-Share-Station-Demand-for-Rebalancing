@@ -11,6 +11,7 @@ Claude Code (Anthropic), running Claude Opus 5.5.
 - Auditing the project materials and profiling Divvy data to inform design decisions.
 - Explaining design trade-offs and recommending options. Each decision and its alternatives are recorded in `docs/decision-log.md`, and the project owner made the final choice.
 - Generating boilerplate and environment setup, and debugging environment failures.
+- Writing the Spark data pipeline and the modelling code (tuning, training, evaluation, MLflow logging) to the approach the owner agreed, and analysing the results.
 
 ## Impact
 

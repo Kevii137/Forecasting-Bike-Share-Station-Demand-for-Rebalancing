@@ -1,0 +1,26 @@
+{
+  "pickups": {
+    "config": {
+      "learning_rate": 0.05472451414891326,
+      "num_leaves": 31,
+      "min_data_in_leaf": 1000,
+      "feature_fraction": 0.8801060408008996,
+      "bagging_fraction": 0.7249466565528164,
+      "lambda_l2": 2.1332374807314576
+    },
+    "val_wape": 0.9959514222369028,
+    "best_iteration": 2163
+  },
+  "dropoffs": {
+    "config": {
+      "learning_rate": 0.05472451414891326,
+      "num_leaves": 31,
+      "min_data_in_leaf": 1000,
+      "feature_fraction": 0.8801060408008996,
+      "bagging_fraction": 0.7249466565528164,
+      "lambda_l2": 2.1332374807314576
+    },
+    "val_wape": 0.9998944975525387,
+    "best_iteration": 1826
+  }
+}

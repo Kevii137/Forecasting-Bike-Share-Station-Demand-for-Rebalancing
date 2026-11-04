@@ -104,3 +104,18 @@ Findings from Milestone 1.
 - **Timezone leak:** `F.lit()` on a Python datetime applies the machine's time zone, which let 6,840 July rows through on an IST machine. Date filtering now happens in pandas on plain labels.
 - **Memory:** the first design ran out of memory on the 14 GB machine, and the kernel killed Spark and the editor twice. The features stage now filters inside the pandas function, so rows that would be dropped never return to the JVM, and Spark is capped at 6 cores and a 4 GB driver. Measured peak after the fix: 6.8 GB for the pipeline, with 1.3 GB of the machine still available.
 - **Alert frequency:** net flow of at least half of capacity occurs in 0.78% of classic station-hours over 3 hours and 2.08% over 6 hours (16 months, all classic stations). With a 3-hour horizon, a ranked list is likely more useful than a fixed alert threshold. To be decided in Milestone 4.
+
+Findings from Milestone 2.
+
+- **Defaults chosen without a separate decision:**
+  - Station ID is not a model input. The global model must generalise to new and renamed stations, so it sees location, capacity and recent volume instead.
+  - MLflow runs as a local tracking server (SQLite with an artifact folder) so that M3 can use the registry.
+  - Tuning uses random search over 12 configurations per target, on a 1.5M-row sample of the training data, with early stopping on January.
+- **Result:** LightGBM beats both baselines overall, at every horizon and in peak hours (February test set, `reports/metrics.json`). The margin over the historical average is narrow: 3% on pickups WAPE, 1% on drop-offs and 3% on net flow MAE. The gain comes from the busiest stations (20+ trips/day) and peak hours, where rebalancing matters most.
+- **Weak spot:** for 5 to 10 trips/day stations the model only ties the historical average, and on drop-offs it is 1.3% worse (WAPE 0.997 against 0.984). This affects the D9 promotion gate, which says a challenger must not be materially worse on any tier. Owner decision (2026-11-04): keep the model for all eligible stations, disclose the weakness, and set the gate's tolerance during M5 threshold calibration. Routing this tier to the historical average was considered and not chosen.
+- **Sparse validation month:** January averages 0.42 trips per station-hour. Forecasting zero everywhere scores a WAPE of exactly 1.0. The model scores 0.993, and both baselines score worse than zero (1.22 and 1.29). WAPE rewards forecasts near the median, which is zero, while a Poisson model forecasts the mean. On sparse data, WAPE therefore cannot show a mean forecast is useful, so a zero forecast is a necessary reference point.
+- **Tuning sensitivity:** all 24 trials fall within 0.5% of each other on validation WAPE. Ranking by Poisson deviance picks the same configuration for both targets. Hyperparameters are not the limiting factor.
+- **Tuning metric, owner decision (2026-11-04):** trials are now ranked by validation Poisson deviance, not WAPE. Deviance is the training loss and a proper score for a mean forecast, and it still separates trials on sparse data. Both metrics chose the same configuration, so the model is unchanged.
+- **Poisson deviance for baselines:** both baselines sometimes forecast exactly zero for an hour that had trips. The deviance then depends on the numerical floor of 1e-9, so baseline deviance (about 11) cannot be compared with the model's (0.94). Comparisons use WAPE, MAE and net flow MAE.
+- **Memory:** tuning and training peaked at 4.9 GB inside the 9 GB cap, with no out-of-memory kills.
+

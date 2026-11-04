@@ -22,4 +22,18 @@ stations:                  # Decision D2
 validation:
   max_rejected_share: 0.10  # stop the pipeline if more rows than this are rejected
 
+model:                     # Milestone 2: LightGBM tuned with Ray Tune
+  tuning_sample_rows: 1500000
+  num_samples: 12          # trials per target
+  max_concurrent_trials: 3
+  threads_per_trial: 2
+  ray_object_store_bytes: 1500000000
+  max_rounds: 3000
+  early_stopping_rounds: 100
+  final_threads: 6
+
+evaluation:
+  tier_bounds: [5, 10, 20] # trips per day: 5-10, 10-20, 20+
+  peak_hours: [7, 8, 9, 16, 17, 18]
+
 seed: 42

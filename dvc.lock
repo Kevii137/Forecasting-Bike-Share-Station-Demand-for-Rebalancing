@@ -165,3 +165,121 @@ stages:
       hash: md5
       md5: 118c63a6ecf68412f627d0428756f793
       size: 1023
+  tune:
+    cmd: PYTHONPATH=src python -m bikeshare.modeling.tune
+    deps:
+    - path: data/processed/features
+      hash: md5
+      md5: b6dcac9441ff0664351728a275abee66.dir
+      size: 207208326
+      nfiles: 198
+    - path: src/bikeshare/modeling/dataset.py
+      hash: md5
+      md5: 5406c1646b46fd5b84a38232b146796f
+      size: 1683
+    - path: src/bikeshare/modeling/metrics.py
+      hash: md5
+      md5: f80cc4a8075f7b860fa6be63a63386c1
+      size: 3303
+    - path: src/bikeshare/modeling/tune.py
+      hash: md5
+      md5: b209e232a5f9049e3b2c5f9020e83243
+      size: 5578
+    params:
+      params.yaml:
+        model:
+          tuning_sample_rows: 1500000
+          num_samples: 12
+          max_concurrent_trials: 3
+          threads_per_trial: 2
+          ray_object_store_bytes: 1500000000
+          max_rounds: 3000
+          early_stopping_rounds: 100
+          final_threads: 6
+        seed: 42
+        split:
+          train:
+          - 2025-08
+          - 2025-12
+          validation:
+          - 2026-01
+          - 2026-01
+          test:
+          - 2026-02
+          - 2026-02
+          replay:
+          - 2026-03
+          - 2026-09
+    outs:
+    - path: reports/best_params.json
+      hash: md5
+      md5: 8c6f362a7ccf7a5ab7d8e1eb6516df6f
+      size: 675
+  train:
+    cmd: PYTHONPATH=src python -m bikeshare.modeling.train
+    deps:
+    - path: data/processed/features
+      hash: md5
+      md5: b6dcac9441ff0664351728a275abee66.dir
+      size: 207208326
+      nfiles: 198
+    - path: reports/best_params.json
+      hash: md5
+      md5: 8c6f362a7ccf7a5ab7d8e1eb6516df6f
+      size: 675
+    - path: src/bikeshare/modeling
+      hash: md5
+      md5: c6a3c52568a40ee0cf246de458565bcd.dir
+      size: 59061
+      nfiles: 16
+    params:
+      params.yaml:
+        evaluation:
+          tier_bounds:
+          - 5
+          - 10
+          - 20
+          peak_hours:
+          - 7
+          - 8
+          - 9
+          - 16
+          - 17
+          - 18
+        model:
+          tuning_sample_rows: 1500000
+          num_samples: 12
+          max_concurrent_trials: 3
+          threads_per_trial: 2
+          ray_object_store_bytes: 1500000000
+          max_rounds: 3000
+          early_stopping_rounds: 100
+          final_threads: 6
+        seed: 42
+        split:
+          train:
+          - 2025-08
+          - 2025-12
+          validation:
+          - 2026-01
+          - 2026-01
+          test:
+          - 2026-02
+          - 2026-02
+          replay:
+          - 2026-03
+          - 2026-09
+    outs:
+    - path: models
+      hash: md5
+      md5: 243c1c0f6fd28c7d4b4718aecc4fb64e.dir
+      size: 15374526
+      nfiles: 3
+    - path: reports/importance.png
+      hash: md5
+      md5: 85ee2e1713288e26ae5cba7709ac779e
+      size: 107083
+    - path: reports/metrics.json
+      hash: md5
+      md5: b017c70507fc24b0d69eece7c7fecb78
+      size: 13990
