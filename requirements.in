@@ -13,6 +13,7 @@ fastapi
 uvicorn
 prometheus-client
 requests
+httpx2  # FastAPI TestClient
 pyyaml
 pytest
 ruff

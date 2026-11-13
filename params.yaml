@@ -37,3 +37,11 @@ evaluation:
   peak_hours: [7, 8, 9, 16, 17, 18]
 
 seed: 42
+
+serving:                   # Milestone 3: FastAPI service. No DVC stage reads these.
+  model_name: bikeshare-demand
+  model_alias: champion
+  model_poll_seconds: 30   # how often to check whether the champion alias moved
+  feature_workers: 4       # processes running the shared feature function
+  alert_limit: 10          # stations listed per direction (Decision D1)
+  min_pressure: 0.1        # list a station only if 3-hour net flow is at least 10% of capacity
