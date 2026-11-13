@@ -1,0 +1,5 @@
+# Frontend container dependencies (Decision D8). It talks to the backend only over REST.
+# Regenerate with:
+#   uv pip compile frontend/requirements.in -o frontend/requirements.lock --python-version 3.12 --exclude-newer 2026-11-01
+streamlit==1.66.0
+requests
