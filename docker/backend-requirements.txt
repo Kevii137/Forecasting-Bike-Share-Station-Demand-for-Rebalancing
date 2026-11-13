@@ -1,0 +1,12 @@
+# Serving and MLflow server dependencies. Versions come from requirements.lock via
+# `pip install -c requirements.lock`, so the image matches the training environment
+# without the Spark, Ray and DVC packages it does not need.
+fastapi
+uvicorn
+mlflow
+lightgbm
+pandas
+numpy
+pyarrow
+prometheus-client
+pyyaml

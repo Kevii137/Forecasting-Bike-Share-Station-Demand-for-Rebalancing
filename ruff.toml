@@ -1,0 +1,2 @@
+# Import roots, so first-party imports sort the same from any directory.
+src = ["src", "frontend"]

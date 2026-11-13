@@ -1,0 +1,9 @@
+# Build context: send only what the images copy. Data, models and caches stay out.
+*
+!src/
+!params.yaml
+!requirements.lock
+!docker/
+!frontend/
+**/__pycache__
+**/.venv*

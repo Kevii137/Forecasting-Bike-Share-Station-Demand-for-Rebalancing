@@ -1,0 +1,77 @@
+# Local deployment: MLflow tracking server and registry, FastAPI backend, Streamlit frontend.
+# Ports are bound to localhost only. Data comes from the DVC pipeline (run `dvc pull` first).
+#
+#   docker compose up -d --build
+#   open http://localhost:8501
+#
+# Stop any MLflow server already running on port 5000 first: both would use mlflow.db.
+# MLflow rejects unknown Host headers (DNS-rebinding protection), so the service name is
+# allowed explicitly for the backend's requests.
+
+x-backend-image: &backend-image
+  build:
+    context: .
+    dockerfile: docker/backend.Dockerfile
+  image: bikeshare-backend:latest
+  user: "${UID:-1000}:${GID:-1000}"   # matches the owner of mlflow.db and mlartifacts/
+
+services:
+  mlflow:
+    <<: *backend-image
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/mlartifacts
+      --workers 1
+      --allowed-hosts mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
+    volumes:
+      - ./mlflow.db:/mlflow/mlflow.db
+      - ./mlartifacts:/mlflow/mlartifacts
+    ports:
+      - "127.0.0.1:5000:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=4)"]
+      interval: 10s
+      start_period: 30s
+    restart: unless-stopped
+
+  backend:
+    <<: *backend-image
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      PANEL_PATH: /data/panel
+      STATIONS_PATH: /data/stations.parquet
+      REPORTS_DIR: /reports
+      DEFAULT_ORIGIN: ${DEFAULT_ORIGIN:-2026-06-17T08:00}
+    volumes:
+      - ./data/processed/panel:/data/panel:ro
+      - ./data/interim/stations.parquet:/data/stations.parquet:ro
+      - ./reports:/reports:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:   # ready only once the champion model is loaded
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=4)"]
+      interval: 10s
+      start_period: 60s
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    mem_limit: 3g
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: bikeshare-frontend:latest
+    environment:
+      BACKEND_URL: http://backend:8000
+      MLFLOW_UI_URL: http://localhost:5000
+    ports:
+      - "127.0.0.1:8501:8501"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
