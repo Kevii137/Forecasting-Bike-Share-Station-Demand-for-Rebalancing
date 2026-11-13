@@ -2,7 +2,26 @@
 
 An end-to-end AIOps pipeline that forecasts hourly pickups and drop-offs for Divvy (Chicago) stations and shows an operations dispatcher which stations need attention. DA3408 AI Operations project, IIT Madras.
 
-**Status:** data pipeline and models complete. Serving, frontend and monitoring are not built yet.
+**Status:** data pipeline, models, serving API and frontend complete. Monitoring (Prometheus and Grafana) and retraining are not built yet.
+
+## Quick start
+
+Requires Docker with Compose, about 4 GB of free memory, and the data and MLflow store from the earlier stages (`dvc pull`, then `dvc repro train` and `python -m bikeshare.modeling.register` if `mlflow.db` is empty).
+
+```bash
+docker compose up -d --build
+python3 scripts/smoke_test.py     # end-to-end checks of the running stack
+```
+
+| Service | URL | What it is |
+|---|---|---|
+| Frontend | http://localhost:8501 | Rebalancing alerts, station forecasts, pipeline console |
+| Backend API | http://localhost:8000/docs | FastAPI, with interactive OpenAPI docs |
+| MLflow | http://localhost:5000 | Experiment tracking and model registry |
+
+All ports bind to localhost only. Stop any other MLflow server on port 5000 first, since both would use `mlflow.db`.
+
+The app replays history: pick a date and hour between March and September 2026 in the sidebar, and it forecasts the next 3 hours from data up to that hour. The first hour of a new day takes 15 to 30 seconds while the backend computes features; other hours that day take under a second.
 
 ## Setup
 
@@ -54,6 +73,37 @@ February 2026 test set, 543,618 station-hour forecasts. WAPE is total absolute e
 | Seasonal naive, same hour last week | 0.991 | 0.963 | 0.796 | 1.55 |
 
 Full breakdowns by horizon, station tier and peak period are in `reports/metrics.json`.
+
+## Serving
+
+The backend loads the model holding the `champion` alias in the MLflow registry, and checks every 30 seconds whether the alias has moved (`POST /model/reload` checks immediately). It builds features with the same function the Spark pipeline uses, on replayed panel history. A test checks that every online feature equals the Spark value exactly.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /alerts?origin=2026-07-15T17:00` | Stations likely to drain or fill over the next 3 hours, ranked by net change as a share of docks |
+| `GET /forecast?origin=...` | 3-hour totals for every active station, with forecast source and confidence |
+| `GET /station?key=...&origin=...` | One station: last 24 hours observed, the forecast, and what happened next in the replay |
+| `GET /model`, `POST /model/reload` | Serving model version, lineage tags, and a registry check |
+| `GET /replay` | The forecast-time window the service accepts |
+| `GET /pipeline` | Data-quality and evaluation reports from the DVC pipeline |
+| `GET /health`, `GET /ready`, `GET /metrics` | Liveness, readiness (model loaded), Prometheus metrics |
+
+Times are Chicago wall-clock hours, as in the Divvy data.
+
+## Development
+
+```bash
+# Backend tests, including online/offline feature parity on real data (about 1 min)
+PYTHONPATH=src .venv/bin/python -m pytest tests
+
+# Frontend: its own environment, matching its container
+uv venv .venv-frontend --python 3.12
+uv pip install --python .venv-frontend/bin/python -r frontend/requirements.lock pytest
+cd frontend && ../.venv-frontend/bin/python -m pytest tests
+
+# Run the backend outside Docker, against an MLflow server on port 5000
+PYTHONPATH=src .venv/bin/python -m bikeshare.serving.app
+```
 
 ## Documentation
 

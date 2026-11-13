@@ -121,3 +121,32 @@ Findings from Milestone 2.
 
 - **Reproducibility:** a full rerun of `tune` and `train` matched the first run exactly: identical test metrics, the same chosen configurations and stopping rounds, and a byte-identical model file.
 - **Lineage flag:** `dvc repro` deletes stage outputs and rewrites `dvc.lock` while it runs, so every run was first tagged as uncommitted code. The dirty check now ignores `dvc.lock` and `reports/`, which the pipeline writes, and still flags changes to code or configuration.
+
+## Milestones 3 and 4: defaults for owner review
+
+The owner asked for M3 and M4 to be completed without stopping for each choice (2026-11-13). These were taken as defaults and can be changed.
+
+- **S1. Replay instead of a live feed.** The service replays the hourly panel. A forecast time (origin) is chosen in the frontend, limited to the replay months, March to September 2026 (D4). Earlier origins are rejected, because forecasting them would reuse training, validation or test data.
+  - *Alternative:* a live GBFS feed. It has no trip history to build features from (D1).
+- **S2. Online features by day.** For each station, the shared feature function (D6) runs once over a 1,400-hour window ending at the end of the requested day, across 4 worker processes. The day's results are cached, holding up to 8 days. The window covers the longest lookback, the 8-week same-hour mean (1,343 hours).
+  - *Measured:* a cold day takes 9 to 16 s natively and up to 34 s in Docker; a cached hour takes 0.2 s. On three replay days, including the 4 July holiday, all 29 model inputs equal the Spark values bit for bit.
+  - *Alternatives:* precomputed features (rejected in D6); a vectorised rewrite of the feature function (a second implementation that could drift from the first).
+- **S3. Registry and reload.** The model is registered as `bikeshare-demand`. `python -m bikeshare.modeling.register` sets the `champion` alias only when no champion exists, and promotion (M6) moves it after that. The backend checks the alias every 30 seconds and loads the new model by version number.
+- **S4. Alert list.** Each direction lists up to 10 stations, ranked by 3-hour net flow as a share of docks. A station is listed only if that share is at least 10%. Only model-tier stations with a known capacity can be listed. This settles the M1 note on ranked lists against a fixed threshold. The settings are `serving.alert_limit` and `serving.min_pressure` in `params.yaml`.
+- **S5. Fallback forecast (D2).** Low-confidence stations get the 8-week same-hour mean. If that history is missing, they get the 4-week mean, then the 1-week hourly mean, then zero.
+- **S6. Container dependencies.** This deviates from D10's "same lockfile in containers":
+  - The backend image installs only the serving packages, with versions constrained by `requirements.lock`. Shared packages have identical versions, and Spark, Ray and DVC are left out. The image is 1.3 GB, and the disk had 6 GB free.
+  - The frontend has its own lockfile (`frontend/requirements.lock`), because it runs in a separate container and never imports backend code.
+- **S7. MLflow in Compose.** The MLflow server runs as a Compose service on the existing `mlflow.db` and `mlartifacts/`, using the backend image. All ports bind to localhost.
+- **S8. Frontend pages.** There are three pages, sharing one forecast-time picker in the sidebar:
+  - Rebalancing alerts: two ranked tables and a map.
+  - Station forecast: the last 24 hours, the forecast, and what happened next.
+  - Pipeline console: model lineage, test results, data-quality counts and a registry check.
+- **S9. Metrics endpoint early.** The backend already exposes request counts, latency, forecasts by source and the model version at `/metrics`, ready for Prometheus in M5.
+
+Findings from Milestones 3 and 4.
+
+- **Bundled model code shadowed the service code:** `mlflow.pyfunc.load_model` puts the model's bundled copy of `src/bikeshare` first on `sys.path`. Already-imported modules were unaffected, but feature workers started afterwards imported the training-time copy, which has no `serving` package, and crashed. The model store now restores `sys.path` after each load.
+- **Input types:** the logged signature requires float64 for every input, as in training, so the service casts before predicting. Spark stores most features as float32, and the service casts its own values to float32 first, so parity stays exact.
+- **MLflow host check:** the MLflow server rejects Host headers it does not know, as protection against DNS rebinding. The Compose service allows its own service name explicitly.
+- **D7 risk still open:** the model is served in-process, not through `mlflow models serve`. Because it is a logged pyfunc, `mlflow models serve -m models:/bikeshare-demand@champion` would work without changes if the rubric needs it.
