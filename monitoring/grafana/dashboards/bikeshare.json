@@ -104,7 +104,7 @@
       "id": 3,
       "type": "stat",
       "title": "Replay",
-      "description": "Whether the simulated clock is advancing.",
+      "description": "Whether the simulated clock is advancing. Retraining pauses it until the new model is ready.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -121,7 +121,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "bikeshare_replay_running",
+          "expr": "bikeshare_replay_running + bikeshare_replay_paused",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -154,6 +154,10 @@
                 "1": {
                   "text": "running",
                   "color": "green"
+                },
+                "2": {
+                  "text": "paused",
+                  "color": "orange"
                 }
               }
             }
@@ -939,7 +943,7 @@
     {
       "id": 17,
       "type": "row",
-      "title": "Service",
+      "title": "Retraining (sustained forecast error, Decision D9)",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -951,6 +955,530 @@
     },
     {
       "id": 18,
+      "type": "stat",
+      "title": "Retraining",
+      "description": "Whether a retraining job is running. It pauses the replay while it trains.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bikeshare_retrain_running",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "idle",
+                  "color": "text"
+                },
+                "1": {
+                  "text": "training",
+                  "color": "orange"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 19,
+      "type": "stat",
+      "title": "Promoted",
+      "description": "Challengers that passed the gate and became champion. Counted since the trainer started; MLflow keeps every run.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 32,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bikeshare_retrain_jobs_total{outcome=\"promoted\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "Rejected",
+      "description": "Challengers registered but kept off the champion alias by the gate. Counted since the trainer started; MLflow keeps every run.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 32,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bikeshare_retrain_jobs_total{outcome=\"rejected\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Failed",
+      "description": "Jobs that did not finish, for example out of memory. Counted since the trainer started; MLflow keeps every run.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bikeshare_retrain_jobs_total{outcome=\"failed\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "Last job",
+      "description": "Wall-clock time of the last retraining job.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 32,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bikeshare_retrain_last_duration_seconds",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "Rollbacks",
+      "description": "Times the champion alias was moved back to the version it replaced. Counted since the trainer started; MLflow keeps every run.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 32,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bikeshare_rollbacks_total",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Champion version and retraining",
+      "description": "The champion version steps up when a challenger is promoted and down on a rollback.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bikeshare_model_version",
+          "legendFormat": "champion version",
+          "refId": "A",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "bikeshare_retrain_running",
+          "legendFormat": "retraining",
+          "refId": "B",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Retraining alerts received",
+      "description": "Alertmanager repeats a firing alert every 5 minutes; the trainer ignores repeats while a job runs and for 7 simulated days after an attempt.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (decision) (increase(bikeshare_retrain_webhooks_total[5m]))",
+          "legendFormat": "{{decision}}",
+          "refId": "A",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(alertmanager_notifications_total{integration=\"webhook\"}[5m]))",
+          "legendFormat": "sent by Alertmanager",
+          "refId": "B",
+          "instant": false,
+          "range": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "row",
+      "title": "Service",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 27,
       "type": "timeseries",
       "title": "Requests per second by endpoint",
       "description": "",
@@ -960,7 +1488,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 45,
         "w": 8,
         "h": 8
       },
@@ -1004,7 +1532,7 @@
       }
     },
     {
-      "id": 19,
+      "id": 28,
       "type": "timeseries",
       "title": "Latency, 95th percentile",
       "description": "A request for an uncached day computes its features first (15 to 35 s).",
@@ -1014,7 +1542,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 32,
+        "y": 45,
         "w": 8,
         "h": 8
       },
@@ -1057,7 +1585,7 @@
       }
     },
     {
-      "id": 20,
+      "id": 29,
       "type": "timeseries",
       "title": "Errors per second",
       "description": "",
@@ -1067,7 +1595,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 32,
+        "y": 45,
         "w": 8,
         "h": 8
       },
@@ -1111,7 +1639,7 @@
       }
     },
     {
-      "id": 21,
+      "id": 30,
       "type": "timeseries",
       "title": "Station forecasts served per second, by source",
       "description": "Model-routed stations against the historical-average fallback (Decision D2).",
@@ -1121,7 +1649,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 53,
         "w": 12,
         "h": 8
       },
@@ -1165,7 +1693,7 @@
       }
     },
     {
-      "id": 22,
+      "id": 31,
       "type": "timeseries",
       "title": "Replay speed",
       "description": "",
@@ -1175,7 +1703,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 40,
+        "y": 53,
         "w": 12,
         "h": 8
       },
@@ -1218,5 +1746,5 @@
       }
     }
   ],
-  "description": "Rolling drift and error from the replay monitor, plus API health."
+  "description": "Rolling drift and error from the replay monitor, retraining, and API health."
 }

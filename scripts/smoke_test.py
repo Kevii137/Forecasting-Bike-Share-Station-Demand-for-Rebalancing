@@ -16,6 +16,8 @@ UI = os.environ.get("UI_URL", "http://localhost:8501")
 MLFLOW = os.environ.get("MLFLOW_URL", "http://localhost:5000")
 PROMETHEUS = os.environ.get("PROMETHEUS_URL", "http://localhost:9090")
 GRAFANA = os.environ.get("GRAFANA_URL", "http://localhost:3000")
+TRAINER = os.environ.get("TRAINER_URL", "http://localhost:8001")
+ALERTMANAGER = os.environ.get("ALERTMANAGER_URL", "http://localhost:9093")
 ORIGIN = os.environ.get("SMOKE_ORIGIN", "2026-07-15T17:00")
 failures = []
 
@@ -26,6 +28,21 @@ def get(url: str, timeout: float = 120) -> tuple[int, str]:
             return response.status, response.read().decode()
     except urllib.error.HTTPError as error:
         return error.code, error.read().decode()
+
+
+def post(url: str, payload: dict, timeout: float = 30) -> tuple[int, str]:
+    request = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
+                                     headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status, response.read().decode()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read().decode()
+
+
+def compose_exec(service: str, *command: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["docker", "compose", "exec", "-T", service, *command],
+                          check=False, capture_output=True, text=True)
 
 
 def check(name: str, passed: bool, detail: str = "") -> None:
@@ -68,8 +85,9 @@ check("replay monitor reports its thresholds", "max_psi" in monitoring.get("thre
 
 status, body = get(f"{PROMETHEUS}/api/v1/targets")
 targets = json.loads(body)["data"]["activeTargets"] if status == 200 else []
-backend_health = [t["health"] for t in targets if t["labels"]["job"] == "backend"]
-check("Prometheus scrapes the backend", backend_health == ["up"], str(backend_health))
+health = {t["labels"]["job"]: t["health"] for t in targets}
+check("Prometheus scrapes the backend, trainer and Alertmanager",
+      all(health.get(job) == "up" for job in ("backend", "trainer", "alertmanager")), str(health))
 
 status, body = get(f"{PROMETHEUS}/api/v1/rules")
 rules = ([rule["name"] for group in json.loads(body)["data"]["groups"] for rule in group["rules"]]
@@ -77,16 +95,36 @@ rules = ([rule["name"] for group in json.loads(body)["data"]["groups"] for rule 
 check("Prometheus has loaded the drift and error alert rules",
       {"BikeshareInputDrift", "BikeshareForecastDegraded"} <= set(rules), f"{len(rules)} rules")
 
+status, body = get(f"{PROMETHEUS}/api/v1/alertmanagers")
+active = json.loads(body)["data"]["activeAlertmanagers"] if status == 200 else []
+check("Prometheus sends alerts to Alertmanager", len(active) == 1, str(active))
+
+status, _ = get(f"{ALERTMANAGER}/-/ready")
+check("Alertmanager is ready", status == 200)
+
+status, body = get(f"{TRAINER}/status")
+trainer = json.loads(body) if status == 200 else {}
+check("trainer reports its status and the champion", status == 200,
+      f"running={trainer.get('running')}, champion={trainer.get('champion_version')}")
+
+# A drift alert is advisory: the trainer must acknowledge it without starting a job.
+status, body = post(f"{TRAINER}/alertmanager", {"alerts": [{
+    "status": "firing", "labels": {"alertname": "BikeshareInputDrift", "action": "investigate"}}]})
+check("trainer ignores an advisory drift alert",
+      status == 200 and json.loads(body).get("decision") == "ignored", body[:120])
+
+lineage = compose_exec("trainer", "git", "-C", "/repo", "rev-parse", "--short", "HEAD")
+check("trainer can read the git commit for lineage tags", lineage.returncode == 0,
+      lineage.stdout.strip() or lineage.stderr.strip()[-120:])
+
 status, body = get(f"{GRAFANA}/api/dashboards/uid/bikeshare")
 check("Grafana serves the provisioned dashboard", status == 200,
       json.loads(body)["dashboard"]["title"] if status == 200 else body[:80])
 
-reach = subprocess.run(
-    ["docker", "compose", "exec", "-T", "frontend", "python", "-c",
-     "import urllib.request; print(urllib.request.urlopen('http://backend:8000/health').read())"],
-    check=False, capture_output=True, text=True,
-)
-check("frontend container reaches the backend over the compose network",
+reach = compose_exec("frontend", "python", "-c",
+                     "import urllib.request; [urllib.request.urlopen(f'http://{host}/health') "
+                     "for host in ('backend:8000', 'trainer:8001')]; print('ok')")
+check("frontend container reaches the backend and trainer over the compose network",
       reach.returncode == 0, reach.stdout.strip() or reach.stderr.strip()[-120:])
 
 print(f"\n{len(failures)} failed" if failures else "\nAll checks passed")

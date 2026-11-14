@@ -1,6 +1,6 @@
-# Local deployment: MLflow tracking server and registry, FastAPI backend, Streamlit frontend,
-# Prometheus and Grafana. Ports are bound to localhost only. Data comes from the DVC pipeline
-# (run `dvc pull` first).
+# Local deployment: MLflow tracking server and registry, FastAPI backend, retraining service,
+# Streamlit frontend, Prometheus, Alertmanager and Grafana. Ports are bound to localhost only.
+# Data comes from the DVC pipeline (run `dvc pull` first).
 #
 #   cp .env.example .env   # then set GRAFANA_ADMIN_PASSWORD
 #   docker compose up -d --build
@@ -14,6 +14,7 @@ x-backend-image: &backend-image
   build:
     context: .
     dockerfile: docker/backend.Dockerfile
+    target: backend
   image: bikeshare-backend:latest
   user: "${UID:-1000}:${GID:-1000}"   # matches the owner of mlflow.db and mlartifacts/
 
@@ -64,6 +65,35 @@ services:
     mem_limit: 3g
     restart: unless-stopped
 
+  trainer:   # retrains when Alertmanager reports sustained forecast error (Decision D9)
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: trainer
+    image: bikeshare-trainer:latest
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      BACKEND_URL: http://backend:8000
+    volumes:
+      # Read-only: jobs run the checked-out code on the DVC-tracked features and record its
+      # git commit, as a training run on the host does.
+      - .:/repo:ro
+    ports:
+      - "127.0.0.1:8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=4)"]
+      interval: 10s
+      start_period: 30s
+    depends_on:
+      mlflow:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    mem_limit: 6g   # a retraining job peaks at about 5 GB
+    restart: unless-stopped
+
   frontend:
     build:
       context: .
@@ -71,6 +101,7 @@ services:
     image: bikeshare-frontend:latest
     environment:
       BACKEND_URL: http://backend:8000
+      TRAINER_URL: http://trainer:8001
       MLFLOW_UI_URL: http://localhost:5000
       GRAFANA_URL: http://localhost:3000/d/bikeshare
     ports:
@@ -94,6 +125,20 @@ services:
       - "127.0.0.1:9090:9090"
     depends_on:
       - backend
+      - alertmanager
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    depends_on:
+      - trainer
     restart: unless-stopped
 
   grafana:

@@ -1,0 +1,23 @@
+# Alertmanager routes retraining alerts to the trainer service (Decision D9).
+#
+# Only alerts labelled action=retrain (sustained forecast error) reach the trainer. Drift
+# (action=investigate) and service alerts stay visible in Prometheus and Grafana only.
+# While the error alert keeps firing, Alertmanager repeats it every 5 minutes; the trainer
+# ignores repeats until 7 simulated days have passed since its last attempt.
+route:
+  receiver: dashboards-only
+  group_by: [alertname]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 5m
+  routes:
+    - receiver: trainer
+      matchers:
+        - action = "retrain"
+
+receivers:
+  - name: dashboards-only
+  - name: trainer
+    webhook_configs:
+      - url: http://trainer:8001/alertmanager
+        send_resolved: false
