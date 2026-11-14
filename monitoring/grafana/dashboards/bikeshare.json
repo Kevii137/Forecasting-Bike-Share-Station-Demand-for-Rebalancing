@@ -878,7 +878,7 @@
       "id": 16,
       "type": "table",
       "title": "Firing alerts",
-      "description": "Alerts Prometheus is firing now. Model alerts carry action=retrain (used in Milestone 6).",
+      "description": "Alerts Prometheus is firing now. Forecast error carries action=retrain (Milestone 6); drift carries action=investigate.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

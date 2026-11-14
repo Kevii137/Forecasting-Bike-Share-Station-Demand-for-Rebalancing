@@ -105,9 +105,9 @@ The replay monitor treats March to September 2026 as simulated production. Start
 | Forecast error | Model WAPE divided by the WAPE of the historical-average fallback | 1.0 |
 | Drift | Largest population stability index (PSI) of 7 inputs and forecasts against the training window | 0.5 |
 
-Thresholds are in `params.yaml` (`monitoring.thresholds`) and were calibrated by replaying every day offline (`dvc repro calibrate`, results in `reports/monitoring_calibration.json` and `.png`). In a replay started on 1 March, both alerts fire on simulated 11 March: 7 days fill the window, then 5 days breach. The reasoning, and an open question on drift, are in the decision log (Milestone 5).
+Thresholds are in `params.yaml` (`monitoring.thresholds`) and were calibrated by replaying every day offline (`dvc repro calibrate`, results in `reports/monitoring_calibration.json` and `.png`). In a replay started on 1 March, both alerts fire on simulated 11 March: 7 days fill the window, then 5 days breach. Only the forecast-error alert will trigger retraining; the drift alert is advisory, because calibration found high drift while the model still beat its fallback. The reasoning is in the decision log (Milestone 5).
 
-Grafana shows the same signals with request rate, latency, errors and firing alerts. Prometheus alert rules are in `monitoring/prometheus/rules.yml`; model alerts carry `action=retrain` for Milestone 6.
+Grafana shows the same signals with request rate, latency, errors and firing alerts. Prometheus alert rules are in `monitoring/prometheus/rules.yml`; the forecast-error alert carries `action=retrain` for Milestone 6, and the drift alert `action=investigate`.
 
 ## Development
 

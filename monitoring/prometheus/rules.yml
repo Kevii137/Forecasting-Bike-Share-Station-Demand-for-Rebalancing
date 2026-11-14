@@ -4,6 +4,10 @@
 # Model alerts count simulated days, not wall-clock time: the backend reports how many
 # consecutive replayed days breached a threshold, and the alert fires once that reaches
 # sustain_days. A fast or slow replay therefore raises the same alerts.
+#
+# Only sustained forecast error retrains (action=retrain). Drift is advisory
+# (action=investigate): calibration showed high drift while the model still beat its
+# fallback, so drift alone would retrain a working model (decision log, Milestone 5).
 groups:
   - name: bikeshare-model
     rules:
@@ -13,7 +17,7 @@ groups:
           >= ignoring(signal, name) bikeshare_monitor_threshold{name="sustain_days"}
         labels:
           severity: warning
-          action: retrain
+          action: investigate
         annotations:
           summary: Model inputs or forecasts have drifted from the training window
           description: >

@@ -85,12 +85,15 @@ def live() -> None:
         st.error(f"The replay stopped: {state['error']}")
     if not state["profile_loaded"] and state["model_version"]:
         st.warning("The champion has no reference profile, so drift is not measured.")
-    messages = {"drift": "Inputs have drifted from the training data",
-                "error": "The model is no better than the historical average"}
+    messages = {"drift": ("Inputs have drifted from the training data",
+                          "Prometheus raises an alert to investigate; drift alone does not retrain."),
+                "error": ("The model is no better than the historical average",
+                          "Prometheus raises a retraining alert.")}
     for signal, firing in state["alerting"].items():
         if firing:
-            st.warning(f"**Alert:** {messages[signal]} for {sustain} or more simulated days. "
-                       "Prometheus raises a retraining alert.")
+            problem, consequence = messages[signal]
+            st.warning(f"**Alert:** {problem} for {sustain} or more simulated days. "
+                       f"{consequence}")
 
     history = pd.DataFrame(state["history"])
     if history.empty or not history["window_full"].any():

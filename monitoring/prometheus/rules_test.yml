@@ -24,7 +24,7 @@ tests:
       - eval_time: 3m
         alertname: BikeshareInputDrift
         exp_alerts:
-          - exp_labels: {severity: warning, action: retrain, job: backend,
+          - exp_labels: {severity: warning, action: investigate, job: backend,
                          instance: "backend:8000"}
             exp_annotations:
               summary: Model inputs or forecasts have drifted from the training window

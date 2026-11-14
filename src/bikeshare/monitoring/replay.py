@@ -10,7 +10,7 @@ A day breaches when its window crosses a threshold. Alerts need the breach to ho
 several consecutive simulated days, so a slow or fast replay gives the same alerts.
 
 When the champion changes, the windows restart: the new model is judged on its own
-forecasts, against its own reference profile. Retraining therefore cannot fire again
+forecasts, against its own reference profile. An alert therefore cannot fire again
 until a full window has passed, which also acts as a cooldown.
 """
 import logging
