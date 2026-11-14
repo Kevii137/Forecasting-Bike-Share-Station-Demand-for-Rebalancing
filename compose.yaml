@@ -1,6 +1,8 @@
-# Local deployment: MLflow tracking server and registry, FastAPI backend, Streamlit frontend.
-# Ports are bound to localhost only. Data comes from the DVC pipeline (run `dvc pull` first).
+# Local deployment: MLflow tracking server and registry, FastAPI backend, Streamlit frontend,
+# Prometheus and Grafana. Ports are bound to localhost only. Data comes from the DVC pipeline
+# (run `dvc pull` first).
 #
+#   cp .env.example .env   # then set GRAFANA_ADMIN_PASSWORD
 #   docker compose up -d --build
 #   open http://localhost:8501
 #
@@ -48,6 +50,7 @@ services:
       - ./data/processed/panel:/data/panel:ro
       - ./data/interim/stations.parquet:/data/stations.parquet:ro
       - ./reports:/reports:ro
+      - ./params.yaml:/app/params.yaml:ro   # thresholds change with a restart, not a rebuild
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:   # ready only once the champion model is loaded
@@ -69,9 +72,48 @@ services:
     environment:
       BACKEND_URL: http://backend:8000
       MLFLOW_UI_URL: http://localhost:5000
+      GRAFANA_URL: http://localhost:3000/d/bikeshare
     ports:
       - "127.0.0.1:8501:8501"
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?copy .env.example to .env and set it}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"    # read-only viewing without a login
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/bikeshare.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:

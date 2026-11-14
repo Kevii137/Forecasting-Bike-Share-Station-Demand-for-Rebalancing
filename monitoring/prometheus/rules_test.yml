@@ -1,0 +1,50 @@
+# Unit tests for the alert rules:
+#   docker run --rm -v "$PWD/monitoring/prometheus:/cfg:ro" --entrypoint promtool \
+#     prom/prometheus:v3.5.0 test rules /cfg/rules_test.yml
+rule_files:
+  - rules.yml
+
+evaluation_interval: 5s
+
+tests:
+  # Drift breaches on simulated days 1, 2 and 3; sustain_days is 3, so the alert fires on
+  # the third. The error streak breaks at 2 and never fires.
+  - interval: 1m
+    input_series:
+      - series: 'bikeshare_monitor_breach_days{job="backend", instance="backend:8000", signal="drift"}'
+        values: "0 1 2 3 4 0"
+      - series: 'bikeshare_monitor_breach_days{job="backend", instance="backend:8000", signal="error"}'
+        values: "0 1 2 0 1 2"
+      - series: 'bikeshare_monitor_threshold{job="backend", instance="backend:8000", name="sustain_days"}'
+        values: "3x5"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BikeshareInputDrift
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: BikeshareInputDrift
+        exp_alerts:
+          - exp_labels: {severity: warning, action: retrain, job: backend,
+                         instance: "backend:8000"}
+            exp_annotations:
+              summary: Model inputs or forecasts have drifted from the training window
+              description: >
+                The largest 7-day PSI has exceeded its threshold for 3 consecutive simulated days.
+      - eval_time: 5m
+        alertname: BikeshareInputDrift
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: BikeshareForecastDegraded
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'up{job="backend", instance="backend:8000"}'
+        values: "1 0 0 0"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BikeshareBackendDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: backend, instance: "backend:8000"}
+            exp_annotations:
+              summary: Prometheus cannot scrape the backend

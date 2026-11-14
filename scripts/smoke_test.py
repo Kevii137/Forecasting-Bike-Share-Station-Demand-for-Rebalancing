@@ -14,6 +14,8 @@ import urllib.request
 API = os.environ.get("API_URL", "http://localhost:8000")
 UI = os.environ.get("UI_URL", "http://localhost:8501")
 MLFLOW = os.environ.get("MLFLOW_URL", "http://localhost:5000")
+PROMETHEUS = os.environ.get("PROMETHEUS_URL", "http://localhost:9090")
+GRAFANA = os.environ.get("GRAFANA_URL", "http://localhost:3000")
 ORIGIN = os.environ.get("SMOKE_ORIGIN", "2026-07-15T17:00")
 failures = []
 
@@ -58,6 +60,26 @@ check("Prometheus metrics are exposed", "bikeshare_requests_total" in body)
 
 status, _ = get(f"{UI}/_stcore/health")
 check("frontend is healthy", status == 200)
+
+status, body = get(f"{API}/monitoring")
+monitoring = json.loads(body) if status == 200 else {}
+check("replay monitor reports its thresholds", "max_psi" in monitoring.get("thresholds", {}),
+      f"running={monitoring.get('running')}, clock={monitoring.get('clock')}")
+
+status, body = get(f"{PROMETHEUS}/api/v1/targets")
+targets = json.loads(body)["data"]["activeTargets"] if status == 200 else []
+backend_health = [t["health"] for t in targets if t["labels"]["job"] == "backend"]
+check("Prometheus scrapes the backend", backend_health == ["up"], str(backend_health))
+
+status, body = get(f"{PROMETHEUS}/api/v1/rules")
+rules = ([rule["name"] for group in json.loads(body)["data"]["groups"] for rule in group["rules"]]
+         if status == 200 else [])
+check("Prometheus has loaded the drift and error alert rules",
+      {"BikeshareInputDrift", "BikeshareForecastDegraded"} <= set(rules), f"{len(rules)} rules")
+
+status, body = get(f"{GRAFANA}/api/dashboards/uid/bikeshare")
+check("Grafana serves the provisioned dashboard", status == 200,
+      json.loads(body)["dashboard"]["title"] if status == 200 else body[:80])
 
 reach = subprocess.run(
     ["docker", "compose", "exec", "-T", "frontend", "python", "-c",
