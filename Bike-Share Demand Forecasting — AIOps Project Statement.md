@@ -39,4 +39,4 @@ The project will be built and managed following AIOps practices throughout the l
 | Serving and packaging | MLflow, FastAPI, Docker | Model serving, with the frontend and backend packaged as separate Docker containers |
 | Monitoring | Prometheus, Grafana | Monitoring latency, data drift and live prediction error |
 
-Because bike demand shifts strongly across seasons, I will replay later months of data as simulated production traffic. This will show drift detection triggering automated retraining and model promotion.
+Because bike demand shifts strongly across seasons, I will replay later months of data as simulated production traffic. This will show data drift and live forecast error being monitored, with sustained forecast degradation triggering automated retraining and model promotion.
