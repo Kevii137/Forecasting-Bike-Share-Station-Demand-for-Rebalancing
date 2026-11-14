@@ -79,6 +79,7 @@ Measured on 2026-10-31 from Divvy trip files (Aug 2025, Jan 2026, Aug 2026, with
 - **Promotion gate:** on recent data neither model trained on, the challenger must beat the champion overall, must not get materially worse on any horizon or station tier, and must beat both baselines. Rollback moves the `champion` alias back.
 - **Alternatives:** fixed schedule; drift only (seasonal change fires it when forecasts are fine); error only (reacts late).
 - **Resolved in Milestone 5:** threshold values were calibrated from normal variation and approved on 2026-11-14 (Milestone 5, T4 and T5).
+- **Amended 2026-11-14 (owner, Milestone 6):** a challenger must beat each baseline only where the champion does; otherwise beating the champion is enough.
 - **Amended 2026-11-14 (owner, Milestone 5 option b):** only sustained error triggers retraining. Sustained drift raises an advisory alert (`action=investigate`), because calibration showed high drift while the model still beat its fallback.
 
 ### D10. Runtime and storage
@@ -199,3 +200,50 @@ Findings from Milestone 5.
 - **Replay speed:** about 45 s per simulated day in Docker, with 4 feature workers using 4 cores, so March to September takes about 2.5 hours. More workers would be faster. The backend uses 2.3 GB of its 3 GB limit, so `serving.feature_workers` and `mem_limit` would have to rise together.
 - **Pandas deprecation warnings:** tests show NumPy "generic timedelta unit" warnings from `Timestamp + Timedelta` arithmetic, including in M1's `features.py`. They predate M5 and do not affect results.
 - **Latency buckets:** the default histogram stopped at 10 s, so a cold-day request (15 to 35 s) could not be measured. Buckets now reach 60 s.
+
+## Milestone 6: retraining, promotion gate and rollback
+
+The owner accepted the seven recommendations on 2026-11-14.
+
+- **R1. A separate trainer container.** The owner asked why, given that the replay pauses. Only the simulated clock pauses; the API keeps serving forecasts. A job peaks at 4.9 GB and uses 6 threads, while the backend is limited to 3 GB. In its own container (limit 6 GB) a failed or out-of-memory job cannot take the API down. The trainer mounts the repository read-only and runs the checked-out code, so each run records the git commit, whether the code had uncommitted changes, and the DVC feature version, as a host training run does. *Alternative:* a subprocess of the backend with its limit raised to about 9 GB.
+- **R2. Training window:** everything from August 2025 up to the retraining time, growing each time. Rows are assigned by target hour, and nothing after the replay's simulated time is read.
+- **R3. Hyperparameters:** the Ray Tune choice is reused (`reports/best_params.json`). M2 found all 24 trials within 0.5% of each other.
+- **R4. Gate window:** the last 14 days before the retraining time. The 14 days before that stop boosting early (7 until the owner's decision below), and the challenger fits on the rest.
+- **R5. The replay pauses** while a job runs (`POST /monitoring/replay/pause`), after the hour in progress, and resumes even if the job fails.
+- **R6. Guards:** one job at a time; alerts are ignored for 7 simulated days after an attempt. Alertmanager repeats a firing alert every 5 minutes.
+- **R7. Rollback by hand:** the Pipeline console or `POST /rollback` moves `champion` to the version recorded in the current champion's `promoted_from` tag.
+
+Implementation choices made without a separate decision.
+
+- **Every challenger is registered,** with tags for the trigger, simulated time, gate result and the champion it was compared with. Only a passing one gets the `champion` alias. Promotion is refused if the champion moved while the job ran.
+- **The drift reference profile is logged with each retrained model** (completing T3), from its own training rows and forecasts.
+- **Refactor:** `fit` and `lightgbm_params` moved from `tune.py` to `modeling/boosting.py`, and evaluation and model logging from `train.py` to `modeling/evaluation.py` and `modeling/packaging.py`, so the trainer image needs neither Ray nor matplotlib. The code was moved, not changed. `dvc commit tune train` recorded the new dependency hashes; no output changed.
+- **Jobs run in a subprocess** of the trainer service, so their memory is returned when they end.
+
+Findings from Milestone 6.
+
+- **End-to-end run (Docker, replay from 1 March):** the error alert fired at simulated 11 March 23:00. Alertmanager called the trainer 6 s later; the trainer paused the replay at 12 March 00:00, trained for 5 minutes, registered version 2, and resumed the replay. The gate rejected it, so version 1 kept serving. A repeat alert 23 simulated hours later was ignored by the cooldown. The error alert then cleared by itself in mid-March, as the calibration predicted, so no second attempt was made.
+- **The gate rejects a challenger that is better than the champion.** On the gate window (26 February to 11 March), with the dry run as of 11 March 23:00:
+
+  | WAPE | Pickups | Drop-offs |
+  |---|---|---|
+  | Challenger | 0.8397 | 0.8368 |
+  | Champion, version 1 | 0.8420 | 0.8386 |
+  | Historical average | 0.8489 | 0.8293 |
+
+  The challenger beats the champion on both targets and is within 0.5% on every horizon and tier, but fails "beat both baselines" on drop-offs. The champion fails it too, which is why the error alert fired. Keeping the champion therefore serves the worse model.
+- **Early stopping on 7 days is unstable.** Moving the retraining time by one hour (11 March 23:00 in the dry run, 12 March 00:00 in Docker) changed the pickups model's stopping round from 1,571 to 790, and the challenger went from beating the champion (0.8397) to losing to it (0.8424). The original model stopped at 2,245 rounds on a full month.
+- **Cost:** a job takes 5 to 7 minutes with 7-day early stopping and 12.5 minutes with 14 days (more trees are kept), and peaks at 4.9 GB (measured with the capped dry run).
+- **Second end-to-end run (after both owner decisions):** the alert at simulated 11 March retrained version 3, which passed the gate and was promoted: pickups WAPE 0.8379 against 0.8420, drop-offs 0.8337 against 0.8387, with the drop-offs baseline check waived. The backend served it at once and the monitor restarted its windows. A rollback then restored version 1, and a second rollback was refused. Version 1 is champion again, so a demonstration can start from the original state.
+
+**Owner decisions needed.**
+
+1. **The gate's baseline rule. Owner decision (2026-11-14): option (b).**
+   - (a) Keep it: the challenger must beat both baselines. A model worse than the champion can never be promoted, but neither can a better one while the champion is also below a baseline.
+   - (b) The challenger must beat each baseline, unless the champion does not either; then beating the champion is enough. This never promotes a model worse than the one serving. **Chosen.**
+   - Consequence: the baseline check can now only fail when the challenger also loses to the champion, so in practice the gate is "beat the champion overall and stay within 3% on every slice". The baseline comparisons are still recorded, and a waived check is listed with its reason in `gate.json`.
+   - The D9 wording "must beat both baselines" is amended accordingly.
+2. **Early stopping. Owner decision (2026-11-14): option (b).**
+   - (a) Keep 7 days.
+   - (b) Stop early on 14 days, so fitting ends 28 days before the retraining time: twice the rows for the same decision. **Chosen.** No re-tuning is needed: early stopping only decides how many trees one training run keeps.
+   - (c) Use a fixed number of rounds from the original training (2,245 and 1,951).
