@@ -70,8 +70,10 @@ def live() -> None:
     thresholds = state["thresholds"]
     sustain = thresholds["sustain_days"]
 
-    columns = st.columns(5)
-    columns[0].metric("Replay", "running" if state["running"] else "stopped")
+    columns = st.columns([1, 1.4, 1, 1, 1])  # the simulated time needs the room
+    phase = ("paused" if state.get("paused") else "running") if state["running"] else "stopped"
+    columns[0].metric("Replay", phase, help="Retraining pauses the replay until the new model "
+                      "is ready, so simulated time does not run ahead of it.")
     clock = pd.Timestamp(state["clock"]) if state["clock"] else None
     columns[1].metric("Simulated time", f"{clock:%d %b %H:%M}" if clock else "not started",
                       help=f"{clock:%A %d %B %Y, %H:%M} Chicago time" if clock else None)
@@ -83,6 +85,8 @@ def live() -> None:
                            f"{thresholds['relative_wape']}")
     if state["error"]:
         st.error(f"The replay stopped: {state['error']}")
+    if state.get("paused"):
+        st.info("The replay is paused while a challenger is retrained (Pipeline console).")
     if not state["profile_loaded"] and state["model_version"]:
         st.warning("The champion has no reference profile, so drift is not measured.")
     messages = {"drift": ("Inputs have drifted from the training data",

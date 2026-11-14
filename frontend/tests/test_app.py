@@ -4,6 +4,7 @@
 """
 from pathlib import Path
 from unittest import mock
+from urllib.parse import urlsplit
 
 import pytest
 import streamlit as st
@@ -79,8 +80,28 @@ RESPONSES = {
 }
 
 
+GATE_FAILED = "dropoffs tier 5-10: challenger WAPE 1.0100 is more than the tolerance worse than champion (0.9700)"
+RESPONSES.update({
+    "/status": {"running": True, "cooldown_days": 7.0, "last_as_of": "2026-03-11T23:00",
+                "champion_version": "1",
+                "job": {"trigger": "BikeshareForecastDegraded", "source": "alertmanager",
+                        "started_at": "2026-11-14T13:00:00+00:00", "as_of": "2026-03-18T23:00",
+                        "from_replay": True, "phase": "training"},
+                "history": [{"outcome": "rejected", "as_of": "2026-03-11T23:00",
+                             "gate": {"passed": False, "failed": [GATE_FAILED]}}]},
+    "/jobs": [{"run_id": "r2", "status": "FINISHED", "started_at": "2026-11-14T12:00:00+00:00",
+               "as_of": "2026-03-11T23:00", "trigger": "BikeshareForecastDegraded",
+               "gate": "failed", "outcome": "rejected", "version": "2",
+               "champion_version": "1", "split_test": "2026-02-26 00:00 to 2026-03-11 23:00",
+               "rolled_back_at": None,
+               "challenger_pickups_wape": 0.81, "champion_pickups_wape": 0.83,
+               "challenger_dropoffs_wape": 0.84, "champion_dropoffs_wape": 0.85}],
+    "/rollback": {"from": "2", "to": "1", "backend_version": "1"},
+})
+
+
 def fake_request(method, url, timeout, params):
-    path = url.split(":8000", 1)[1]
+    path = urlsplit(url).path
     response = mock.Mock(status_code=200)
     response.json.return_value = RESPONSES[path]
     return response
@@ -122,6 +143,19 @@ def test_pipeline_console_shows_lineage_and_reloads(backend):
     assert "3b28d186d5f1" in app.markdown[0].value
     app.button[0].click().run()
     assert any(call.args[:1] == ("POST",) for call in backend.call_args_list)
+
+
+def test_pipeline_console_shows_retraining_jobs_and_gate_reasons(backend):
+    app = run("views/pipeline.py")
+    assert any("Retraining in progress (training)" in info.value for info in app.info)
+    assert any(GATE_FAILED in warning.value for warning in app.warning)
+    jobs = app.dataframe[0].value
+    assert jobs["Outcome"].tolist() == ["rejected"] and jobs["Version"].tolist() == ["2"]
+    assert next(button for button in app.button if button.label == "Retrain now").disabled
+    next(button for button in app.button if button.label == "Confirm rollback").click().run()
+    assert ("POST", "http://localhost:8001/rollback") in [
+        call.args[:2] for call in backend.call_args_list]
+    assert any("from version 2 to 1" in success.value for success in app.success)
 
 
 def test_unreachable_backend_shows_an_error(backend):
