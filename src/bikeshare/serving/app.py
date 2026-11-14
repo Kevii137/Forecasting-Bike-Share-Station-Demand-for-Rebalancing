@@ -277,6 +277,22 @@ def create_app(settings: Settings | None = None, features: FeatureStore | None =
         app.state.monitor.stop()
         return app.state.monitor.status()
 
+    @app.post("/monitoring/replay/pause")
+    def pause_replay() -> dict:
+        """Hold the simulated clock; returns once the hour in progress has finished."""
+        try:
+            app.state.monitor.pause()
+        except RuntimeError as error:
+            raise HTTPException(409, str(error)) from error
+        except TimeoutError as error:
+            raise HTTPException(504, str(error)) from error
+        return app.state.monitor.status()
+
+    @app.post("/monitoring/replay/resume")
+    def resume_replay() -> dict:
+        app.state.monitor.resume()
+        return app.state.monitor.status()
+
     @app.get("/metrics")
     def metrics() -> Response:
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

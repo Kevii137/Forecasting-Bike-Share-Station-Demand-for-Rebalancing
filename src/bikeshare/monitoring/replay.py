@@ -39,7 +39,8 @@ log = logging.getLogger(__name__)
 
 CLOCK = Gauge("bikeshare_replay_clock_seconds",
               "Simulated origin hour, Chicago wall-clock time encoded as if it were UTC")
-RUNNING = Gauge("bikeshare_replay_running", "1 while the replay is advancing")
+RUNNING = Gauge("bikeshare_replay_running", "1 while the replay is advancing or paused")
+PAUSED = Gauge("bikeshare_replay_paused", "1 while the replay is paused, for example for retraining")
 HOURS = Counter("bikeshare_replay_hours_total", "Simulated origin hours processed")
 WINDOW_DAYS = Gauge("bikeshare_monitor_window_days", "Days in the current rolling window")
 WAPE = Gauge("bikeshare_monitor_wape", "Rolling-window WAPE",
@@ -87,6 +88,9 @@ class ReplayMonitor:
         self.load_profile = load_profile
         self._lock = threading.RLock()  # summary() calls status() while holding it
         self._stop = threading.Event()
+        self._resume = threading.Event()  # cleared while paused
+        self._resume.set()
+        self._idle = threading.Event()  # set while the paused loop waits between hours
         self._thread: threading.Thread | None = None
         self.first = self.last = self.clock = None
         self.delay_seconds = 0.0
@@ -95,6 +99,7 @@ class ReplayMonitor:
         self._reset(None)
         thresholds.publish()
         RUNNING.set(0)
+        PAUSED.set(0)
         CLOCK.set(float("nan"))  # no simulated time until a replay starts
 
     # State -----------------------------------------------------------------------------
@@ -124,6 +129,10 @@ class ReplayMonitor:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
+    @property
+    def paused(self) -> bool:
+        return self.running and not self._resume.is_set()
+
     def start(self, first: pd.Timestamp, last: pd.Timestamp, delay_seconds: float = 0.0) -> None:
         if self.running:
             raise RuntimeError("replay is already running")
@@ -137,6 +146,8 @@ class ReplayMonitor:
             self.first, self.last, self.clock = first, last, None
             self.delay_seconds, self.error = delay_seconds, None
         self._stop.clear()
+        self._resume.set()
+        self._idle.clear()
         self._thread = threading.Thread(target=self._run, name="replay", daemon=True)
         self._thread.start()
 
@@ -145,10 +156,39 @@ class ReplayMonitor:
         if self._thread:
             self._thread.join(timeout=120)
 
+    def pause(self, timeout: float = 180.0) -> None:
+        """Hold the clock after the hour in progress, and return once it has finished.
+
+        Retraining pauses the replay so that simulated time does not run ahead while a
+        model trains on the data observed so far.
+        """
+        if not self.running:
+            raise RuntimeError("replay is not running")
+        self._resume.clear()
+        PAUSED.set(1)
+        deadline = time.monotonic() + timeout
+        while self.running and not self._idle.is_set():
+            if time.monotonic() > deadline:
+                raise TimeoutError("the replay did not finish its current hour in time")
+            time.sleep(0.05)
+
+    def resume(self) -> None:
+        self._resume.set()
+        PAUSED.set(0)
+
+    def _hold_while_paused(self) -> None:
+        if self._resume.is_set():
+            return
+        self._idle.set()
+        while not self._resume.wait(0.5) and not self._stop.is_set():
+            pass
+        self._idle.clear()
+
     def _run(self) -> None:
         RUNNING.set(1)
         try:
             for origin in pd.date_range(self.first, self.last, freq="h"):
+                self._hold_while_paused()
                 if self._stop.is_set():
                     break
                 self.step(origin)
@@ -158,7 +198,9 @@ class ReplayMonitor:
             self.error = f"{type(error).__name__}: {error}"
             log.exception("Replay stopped at %s", self.clock)
         finally:
+            self._idle.set()  # a pause() waiting on this thread can return
             RUNNING.set(0)
+            PAUSED.set(0)
 
     # One simulated hour ------------------------------------------------------------------
 
@@ -265,7 +307,7 @@ class ReplayMonitor:
         with self._lock:
             sustain = self.thresholds.sustain_days
             return {
-                "running": self.running, "first": stamp(self.first), "last": stamp(self.last),
+                "running": self.running, "paused": self.paused, "first": stamp(self.first), "last": stamp(self.last),
                 "clock": stamp(self.clock), "delay_seconds": self.delay_seconds,
                 "model_version": self.version, "profile_loaded": self.profile is not None,
                 "window_days": len(self.records), "window_size": self.window_days,

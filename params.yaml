@@ -67,3 +67,12 @@ promotion:                 # Milestone 6 promotion gate (Decision D9); approved 
   tier_tolerance: 0.03     # a challenger may be at most 3% worse than the champion on any
                            # horizon or volume tier; one model's tier WAPE ratio moves a median
                            # 2.4-2.8% week to week
+                           # baselines must be beaten only where the champion beats them
+  gate_days: 14            # the challenger and champion are compared on the last 14 days before
+                           # the retraining time, which neither trained on
+
+retraining:                # Milestone 6, Decision D9. No DVC stage reads these.
+  early_stopping_days: 14  # the 14 days before the gate window stop boosting early; 7 days
+                           # was unstable (decision log, Milestone 6)
+  cooldown_days: 7         # simulated days after one attempt before an alert can start another
+  threads: 6               # LightGBM threads, as for the original training
