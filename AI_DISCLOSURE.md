@@ -13,6 +13,7 @@ Claude Code (Anthropic), running Claude Opus 5.5.
 - Generating boilerplate and environment setup, and debugging environment failures.
 - Writing the Spark data pipeline and the modelling code (tuning, training, evaluation, MLflow logging) to the approach the owner agreed, and analysing the results.
 - Writing the serving API, Streamlit frontend and Docker Compose deployment. The owner asked for these milestones to be completed without stopping for each choice, so the defaults taken are listed for review in `docs/decision-log.md` (S1 to S9).
+- Writing the monitoring code (replay monitor, drift and error signals, Prometheus rules, Grafana dashboard) and running the threshold calibration. The owner approved the thresholds; the recommendation on drift-triggered retraining awaits the owner's decision (decision log, Milestone 5).
 
 ## Impact
 

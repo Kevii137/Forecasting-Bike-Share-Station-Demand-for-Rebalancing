@@ -2,22 +2,25 @@
 
 An end-to-end AIOps pipeline that forecasts hourly pickups and drop-offs for Divvy (Chicago) stations and shows an operations dispatcher which stations need attention. DA3408 AI Operations project, IIT Madras.
 
-**Status:** data pipeline, models, serving API and frontend complete. Monitoring (Prometheus and Grafana) and retraining are not built yet.
+**Status:** data pipeline, models, serving API, frontend and monitoring (Prometheus and Grafana) complete. Automated retraining and promotion are not built yet.
 
 ## Quick start
 
 Requires Docker with Compose, about 4 GB of free memory, and the data and MLflow store from the earlier stages (`dvc pull`, then `dvc repro train` and `python -m bikeshare.modeling.register` if `mlflow.db` is empty).
 
 ```bash
+cp .env.example .env              # then set GRAFANA_ADMIN_PASSWORD
 docker compose up -d --build
 python3 scripts/smoke_test.py     # end-to-end checks of the running stack
 ```
 
 | Service | URL | What it is |
 |---|---|---|
-| Frontend | http://localhost:8501 | Rebalancing alerts, station forecasts, pipeline console |
+| Frontend | http://localhost:8501 | Rebalancing alerts, station forecasts, model monitoring, pipeline console |
 | Backend API | http://localhost:8000/docs | FastAPI, with interactive OpenAPI docs |
 | MLflow | http://localhost:5000 | Experiment tracking and model registry |
+| Grafana | http://localhost:3000 | Monitoring dashboard, read-only without login |
+| Prometheus | http://localhost:9090 | Metrics and alert rules |
 
 All ports bind to localhost only. Stop any other MLflow server on port 5000 first, since both would use `mlflow.db`.
 
@@ -88,18 +91,38 @@ The backend loads the model holding the `champion` alias in the MLflow registry,
 | `GET /pipeline` | Data-quality and evaluation reports from the DVC pipeline |
 | `GET /health`, `GET /ready`, `GET /metrics` | Liveness, readiness (model loaded), Prometheus metrics |
 
+| `GET /monitoring` | Replay status, the latest 7-day window and one row per simulated day |
+| `POST /monitoring/replay/start?first=...&last=...&delay_seconds=0`, `POST /monitoring/replay/stop` | Control the simulated clock |
+
 Times are Chicago wall-clock hours, as in the Divvy data.
+
+## Monitoring
+
+The replay monitor treats March to September 2026 as simulated production. Start it from the frontend's **Model monitoring** page, or with `curl -X POST localhost:8000/monitoring/replay/start`. A simulated clock advances one hour at a time. At each hour the backend forecasts every station. At the end of each simulated day it scores the forecasts against the trips that then happened, and compares the week's inputs with the training data. In Docker each simulated day takes about 45 seconds, mostly computing that day's features, so all of March to September takes about 2.5 hours. A replay from 1 March reaches its first alerts in about 8 minutes.
+
+| Signal | Measure, over the last 7 simulated days | Alert after 5 consecutive days above |
+|---|---|---|
+| Forecast error | Model WAPE divided by the WAPE of the historical-average fallback | 1.0 |
+| Drift | Largest population stability index (PSI) of 7 inputs and forecasts against the training window | 0.5 |
+
+Thresholds are in `params.yaml` (`monitoring.thresholds`) and were calibrated by replaying every day offline (`dvc repro calibrate`, results in `reports/monitoring_calibration.json` and `.png`). In a replay started on 1 March, both alerts fire on simulated 11 March: 7 days fill the window, then 5 days breach. The reasoning, and an open question on drift, are in the decision log (Milestone 5).
+
+Grafana shows the same signals with request rate, latency, errors and firing alerts. Prometheus alert rules are in `monitoring/prometheus/rules.yml`; model alerts carry `action=retrain` for Milestone 6.
 
 ## Development
 
 ```bash
-# Backend tests, including online/offline feature parity on real data (about 1 min)
+# Backend tests, including online/offline parity on real data (about 3 min)
 PYTHONPATH=src .venv/bin/python -m pytest tests
 
 # Frontend: its own environment, matching its container
 uv venv .venv-frontend --python 3.12
 uv pip install --python .venv-frontend/bin/python -r frontend/requirements.lock pytest
 cd frontend && ../.venv-frontend/bin/python -m pytest tests
+
+# Prometheus alert-rule unit tests
+docker run --rm -v "$PWD/monitoring/prometheus:/cfg:ro" --entrypoint promtool \
+  prom/prometheus:v3.5.0 test rules /cfg/rules_test.yml
 
 # Run the backend outside Docker, against an MLflow server on port 5000
 PYTHONPATH=src .venv/bin/python -m bikeshare.serving.app

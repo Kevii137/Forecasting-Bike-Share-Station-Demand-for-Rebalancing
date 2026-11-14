@@ -78,7 +78,7 @@ Measured on 2026-10-31 from Divvy trip files (Aug 2025, Jan 2026, Aug 2026, with
 - **Decision:** retraining fires on sustained drift (PSI on key features and predictions) or sustained error (rolling 7-day WAPE), with a cooldown, through a Prometheus alert and Alertmanager webhook.
 - **Promotion gate:** on recent data neither model trained on, the challenger must beat the champion overall, must not get materially worse on any horizon or station tier, and must beat both baselines. Rollback moves the `champion` alias back.
 - **Alternatives:** fixed schedule; drift only (seasonal change fires it when forecasts are fine); error only (reacts late).
-- **Open:** threshold values are not set. They will be calibrated from normal variation and approved in Milestone 5.
+- **Resolved in Milestone 5:** threshold values were calibrated from normal variation and approved on 2026-11-14 (Milestone 5, T4 and T5).
 
 ### D10. Runtime and storage
 
@@ -150,3 +150,51 @@ Findings from Milestones 3 and 4.
 - **Input types:** the logged signature requires float64 for every input, as in training, so the service casts before predicting. Spark stores most features as float32, and the service casts its own values to float32 first, so parity stays exact.
 - **MLflow host check:** the MLflow server rejects Host headers it does not know, as protection against DNS rebinding. The Compose service allows its own service name explicitly.
 - **D7 risk still open:** the model is served in-process, not through `mlflow models serve`. Because it is a logged pyfunc, `mlflow models serve -m models:/bikeshare-demand@champion` would work without changes if the rubric needs it.
+
+## Milestone 5: monitoring
+
+D9 left the thresholds open for approval in this milestone. The owner approved the calibrated thresholds (T4) and the quiet-tier tolerance (T5) on 2026-11-14. T1–T3, T6 and T7 are implementation defaults. Whether drift alone should trigger retraining is still open (below).
+
+- **T1. Replay monitor inside the backend.** A simulated clock moves one origin hour at a time through March to September 2026. At each hour the backend forecasts every active station through the same code path as `/alerts`. At the last hour of each day it scores the forecasts whose target hours have now happened, and updates a 7-day rolling window. It is started and stopped from the frontend's monitoring page or `POST /monitoring/replay/start`.
+  - Errors are counted on the day of the target hour. Drift is counted on the day the inputs were seen. Only model-routed stations are monitored.
+  - When the champion changes, the windows restart, so the new model is judged only on its own forecasts. A new model cannot raise an alert until a full window has passed, which also acts as the D9 cooldown.
+  - *Alternatives:* a separate replay container that calls the API over HTTP (more traffic realism, but the forecasts would be scored outside the service); backfilling Prometheus with historical timestamps (not live monitoring).
+- **T2. Error signal: model WAPE divided by the fallback's WAPE.** The fallback is the historical average the service would otherwise serve, scored on the same rows. A value above 1 means the model is no longer worth serving.
+  - *Why not raw WAPE:* it falls as demand rises, from 0.85 in March to about 0.6 in summer, with the same model. A fixed WAPE threshold would track ridership, not model quality.
+- **T3. Drift signal: PSI against the training window.** Seven columns are monitored: the 8-week same-hour means, 24-hour means, 28-day volume, and both forecasts. They are the strongest demand inputs by SHAP, plus the model's own output. The reference is a 500,000-row sample of the training window, binned at deciles. It is logged as `monitoring/reference_profile.json` in the model's MLflow run, so the service always compares against the profile of the model it is serving. M6 will log it at training time. Version 1's profile was added to its existing run.
+- **T4. Thresholds.** These are calibrated with `dvc repro calibrate` (`reports/monitoring_calibration.json` and `.png`). The calibration reduces every day from August 2025 to September 2026 exactly as the live monitor does: a test checks that a replayed day equals the offline record.
+
+  | Signal | Training window (Aug–Dec) | Jan–Feb (model judged fit) | Replay (Mar–Sep) |
+  |---|---|---|---|
+  | Largest 7-day PSI | median 0.20, max 2.49 | median 1.99, max 2.56 | median 0.20, max 1.04 |
+  | Worse target's WAPE / fallback WAPE | in-sample, max 0.96 | median 0.95, max 1.03 | median 0.96, max 1.04 |
+
+  - **Error: above 1.0 on 5 consecutive simulated days.** In the continuous offline series it fires once, on 5 March, and clears after 17 March, during a real weak spot where the model is up to 4% worse than the fallback on drop-offs. It raises no alert in January or February. A 3-day sustain raised two short false alerts in February.
+  - **Drift: largest PSI above 0.5 on 5 consecutive days.** It fires on 5 March and clears after 8 April. Below 0.5, weather-driven weeks in summer start to fire; above 1.0, nothing in the replay does.
+  - Thresholds live in `params.yaml` and reach Prometheus as `bikeshare_monitor_threshold`, so the rules have no copies of them. Alerts count consecutive breaching simulated days, not wall-clock time, so a fast or slow replay raises the same alerts.
+- **T5. Quiet-tier gate tolerance (M2 owner decision).** A challenger may be at most 3% worse than the champion on any horizon or volume tier (`promotion.tier_tolerance`). For context, one model's 5–10 trips/day WAPE ratio moves a median 2.4% (pickups) to 2.8% (drop-offs) from one week to the next. A tighter tolerance would fail challengers on noise.
+- **T6. Prometheus and Grafana.**
+  - Images: `prom/prometheus:v3.5.0` and `grafana/grafana:12.1.0`, both pinned.
+  - Prometheus scrapes every 5 s and keeps 7 days of data.
+  - Grafana's datasource and dashboard are provisioned from files in Git, and editing them in the UI is disabled. Anonymous users get read-only access. The admin password comes from `.env`, which Git ignores; `.env.example` holds a placeholder.
+- **T7. Alertmanager deferred to M6.** The two model alerts carry `action=retrain`. Alertmanager and the webhook that starts retraining belong with the retraining job.
+
+**Owner decision needed: should drift trigger retraining on its own?** D9 retrains on sustained drift or sustained error. The calibration does not support drift as a trigger on this data:
+
+- **The training window already covers the demand range.** Training was August to December, so it includes both late-summer and early-winter demand. Within it, a single week already reaches PSI 2.5 against the window's own profile.
+- **The expected warm-season drift does not appear.** The replay never goes above 1.04, and summer 2026 is close to the reference (PSI near 0.02 on the 8-week means). D4's expected "warm-season surge" drift therefore does not occur.
+- **High drift did not mean a worse model.** In January and February, PSI was around 2 while the model beat its fallback by 5% to 30%. A drift trigger would have retrained a model that was working.
+
+Options:
+
+- (a) Keep D9 as decided. In the replay both alerts fire on 5 March, so M6 behaves the same either way.
+- (b) Make drift advisory (`action=investigate`) and retrain only on error. This is the recommendation, because it matches the evidence and the drift-only risk D9 already listed.
+
+Findings from Milestone 5.
+
+- **DVC staleness from bytecode:** `dvc.lock` hashed `src/bikeshare/modeling` including `__pycache__`, so any test run marked `train` as changed, and `dvc repro` would have retrained for nothing. `.dvcignore` now excludes bytecode. The lock was re-recorded with `dvc commit train`; only that directory hash changed (16 files to 9 source files).
+- **Feature cache lock:** the feature store held one lock while computing a day (15 to 35 s), so a replay computing a new day blocked dispatcher requests for days already cached. The lock now covers only the cache, and requests for a day already being computed share that one computation.
+- **End-to-end replay (Docker, 1 to 14 March):** both alerts fired in Prometheus on simulated 11 March, after 7 days to fill the window and 5 breaching days. The offline calibration says 5 March because its windows reach back into February. From 8 March onward, every live window value equals the offline calibration to four decimals.
+- **Replay speed:** about 45 s per simulated day in Docker, with 4 feature workers using 4 cores, so March to September takes about 2.5 hours. More workers would be faster. The backend uses 2.3 GB of its 3 GB limit, so `serving.feature_workers` and `mem_limit` would have to rise together.
+- **Pandas deprecation warnings:** tests show NumPy "generic timedelta unit" warnings from `Timestamp + Timedelta` arithmetic, including in M1's `features.py`. They predate M5 and do not affect results.
+- **Latency buckets:** the default histogram stopped at 10 s, so a cold-day request (15 to 35 s) could not be measured. Buckets now reach 60 s.
