@@ -1,6 +1,6 @@
 # High-level design
 
-We forecast hourly pickups and drop-offs for every Divvy station in Chicago, 1 to 3 hours ahead, and list the stations most likely to run out of bikes or docks. Trip data from March to September 2026 is replayed as if it were live. Every decision below, with its alternatives, is in [decision-log.md](decision-log.md) (D1–D11, S1–S9, T1–T7, R1–R7).
+We forecast hourly pickups and drop-offs for every Divvy station in Chicago, 1 to 3 hours ahead, and list the stations most likely to run out of bikes or docks. Trip data from March to September 2026 is replayed as if it were live. The codes in brackets (D1, T4, R7 and so on) are decision numbers; comments in the code refer to them.
 
 ## User workflow
 
@@ -75,6 +75,7 @@ flowchart TD
 In the end-to-end run, the alert at simulated 11 March retrained version 3. It beat version 1 on both targets (pickups WAPE 0.8379 vs 0.8420, drop-offs 0.8337 vs 0.8387) and was promoted. A rollback restored version 1.
 
 Known limits:
+- For stations with 5–10 trips/day the model only ties the historical average, and on drop-offs it is slightly worse (test-month WAPE 0.997 against 0.984). This is why the gate allows 3%.
 - The replay pauses for about 12 minutes while a model trains. This is not a zero-downtime retraining.
 - The cooldown lives in the trainer's memory, so restart the trainer before replaying the same dates again.
 - There is no CI server (D11). The DVC pipeline, tests and smoke test are run by hand.

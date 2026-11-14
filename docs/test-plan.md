@@ -181,7 +181,7 @@ The backend suite took 95 s and the frontend suite 2 s.
   - The error alert fired at simulated 11 March 23:00. Alertmanager called the trainer 6 s later, and the replay paused at 12 March 00:00.
   - Version 2 was trained in 5 minutes and rejected. It did not beat the historical average on drop-offs, and neither did the champion; with the unstable early stopping it also lost to the champion on pickups.
   - The replay resumed. A repeat alert 23 simulated hours later was ignored by the cooldown.
-  - These findings led to the two owner decisions in the decision log, Milestone 6.
+  - These findings led to two owner decisions: a challenger only has to beat a baseline the champion also beats, and early stopping uses 14 days instead of 7.
 - **Second run (amended gate, 14-day early stopping):**
   - Version 3 was trained in 12.5 minutes and **promoted**: pickups WAPE 0.8379 against the champion's 0.8420, drop-offs 0.8337 against 0.8387. The drop-offs baseline check was waived because the champion also trailed the historical average.
   - The backend served version 3 at once. After the replay resumed, the monitor restarted its windows for version 3.

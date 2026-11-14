@@ -1,22 +1,20 @@
-# AI disclosure
+# AI Disclosure
 
-Required by the DA3408 Code of Conduct on fair and responsible use of AI. This file is updated as the project progresses.
+## Tool used
 
-## Tools used
+- **Claude Code (Anthropic), powered by Claude Opus 5.5.**
 
-Claude Code (Anthropic), running Claude Opus 5.5.
+## How I used it
 
-## How it was used
+- I used Claude Code to review the project materials and help profile the Divvy dataset. I used these findings as input when considering the project design.
+- I used it to explain design trade-offs and recommend possible options. I considered the alternatives and made the final decisions myself.
+- I used it to generate boilerplate code and assist with environment setup, as well as to diagnose and debug environment-related failures.
+- I used it for implementation assistance with the Spark data pipeline and the modelling workflow, including tuning, training, evaluation, and MLflow logging. I also used it to help interpret the results. I was responsible for reviewing the implementation and ensuring that the final workflow matched the decisions documented for the project.
+- I used it to assist with the serving API, Streamlit frontend, and Docker Compose setup. For some milestones, I asked it to proceed using reasonable defaults rather than pausing for every individual choice. Those defaults were recorded for my review and are described in `docs/hld.md`.
+- I used it to assist with the monitoring components, including the replay monitor, drift and error signals, Prometheus rules, and Grafana dashboard, and with threshold calibration. I made the decision to keep drift advisory and to use forecast error as the trigger for retraining; this is documented in `docs/hld.md`.
+- I used it to assist with the retraining service, Alertmanager routing, promotion gate, and rollback implementation, based on the recommendations I accepted. I also used it while running and investigating the end-to-end retraining test. The relevant decisions are documented under Milestone 6.
+- I used it to draft the architecture, HLD, LLD, test plan, and user manual in `docs/`, using the project's code, decision log, and test results as source material. These documents are drafts for my review, and I am responsible for checking that they accurately describe the implemented system.
 
-- Auditing the project materials and profiling Divvy data to inform design decisions.
-- Explaining design trade-offs and recommending options. Each decision and its alternatives are recorded in `docs/decision-log.md`, and the project owner made the final choice.
-- Generating boilerplate and environment setup, and debugging environment failures.
-- Writing the Spark data pipeline and the modelling code (tuning, training, evaluation, MLflow logging) to the approach the owner agreed, and analysing the results.
-- Writing the serving API, Streamlit frontend and Docker Compose deployment. The owner asked for these milestones to be completed without stopping for each choice, so the defaults taken are listed for review in `docs/decision-log.md` (S1 to S9).
-- Writing the monitoring code (replay monitor, drift and error signals, Prometheus rules, Grafana dashboard) and running the threshold calibration. The owner approved the thresholds and chose to make drift advisory, so only forecast error triggers retraining (decision log, Milestone 5).
-- Writing the retraining service, Alertmanager routing, promotion gate and rollback to the seven recommendations the owner accepted, and running the end-to-end retraining test (decision log, Milestone 6).
-- Drafting the architecture, HLD, LLD, test plan and user manual (`docs/`) from the project's code, decision log and test results, for the owner's review.
+## Impact on the project
 
-## Impact
-
-The AI tool shaped the options considered and accelerated setup. The project owner chose the design, and in some cases chose differently from the AI recommendation (D3 and D7 in the decision log).
+Claude Code helped me explore alternatives, speed up routine development work, troubleshoot environment issues, and prepare project documentation. It also provided implementation suggestions and generated parts of the code, which I treated as assistance rather than as a substitute for understanding the system.

@@ -664,7 +664,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "Relative WAPE by station volume tier (trips per day)",
-      "description": "The 5-10 trips/day tier is the known weak spot (decision log, Milestone 2).",
+      "description": "The 5-10 trips/day tier is the known weak spot (docs/hld.md, known limits).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

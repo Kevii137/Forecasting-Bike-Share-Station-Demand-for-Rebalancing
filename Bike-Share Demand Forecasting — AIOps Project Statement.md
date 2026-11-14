@@ -1,7 +1,5 @@
 # Bike-Share Demand Forecasting — AIOps Project Statement
 
-DA3408 AI Operations · @Baby · Oct 31, 2026
-
 ## Project title
 
 **Forecasting Bike-Share Station Demand for Proactive Rebalancing: An End-to-End AIOps Pipeline**

@@ -108,7 +108,7 @@ The replay monitor treats March to September 2026 as simulated production. Start
 | Forecast error | Model WAPE divided by the WAPE of the historical-average fallback | 1.0 |
 | Drift | Largest population stability index (PSI) of 7 inputs and forecasts against the training window | 0.5 |
 
-Thresholds are in `params.yaml` (`monitoring.thresholds`) and were calibrated by replaying every day offline (`dvc repro calibrate`, results in `reports/monitoring_calibration.json` and `.png`). In a replay started on 1 March, both alerts fire on simulated 11 March: 7 days fill the window, then 5 days breach. Only the forecast-error alert will trigger retraining; the drift alert is advisory, because calibration found high drift while the model still beat its fallback. The reasoning is in the decision log (Milestone 5).
+Thresholds are in `params.yaml` (`monitoring.thresholds`) and were calibrated by replaying every day offline (`dvc repro calibrate`, results in `reports/monitoring_calibration.json` and `.png`). In a replay started on 1 March, both alerts fire on simulated 11 March: 7 days fill the window, then 5 days breach. Only the forecast-error alert will trigger retraining; the drift alert is advisory, because calibration found high drift while the model still beat its fallback. The reasoning is in the [high-level design](docs/hld.md).
 
 Grafana shows the same signals with request rate, latency, errors, firing alerts and retraining. Prometheus alert rules are in `monitoring/prometheus/rules.yml`; the forecast-error alert carries `action=retrain`, and the drift alert `action=investigate`.
 
@@ -170,5 +170,4 @@ PYTHONPATH=src .venv/bin/python -m bikeshare.serving.app
 - [Low-level design](docs/lld.md): API endpoints with inputs and outputs, data contracts, algorithms
 - [Test plan, test cases and test report](docs/test-plan.md)
 - [User manual](docs/user-manual.md), for dispatchers and operations staff
-- [Decision log](docs/decision-log.md)
 - [AI disclosure](AI_DISCLOSURE.md)
