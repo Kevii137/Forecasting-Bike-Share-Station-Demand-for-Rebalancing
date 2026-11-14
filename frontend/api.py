@@ -63,3 +63,17 @@ def reload_model() -> dict:
     result = _request("POST", "/model/reload")
     st.cache_data.clear()
     return result
+
+
+def monitoring() -> dict:
+    """Not cached: the replay moves on every few seconds."""
+    return _request("GET", "/monitoring")
+
+
+def start_replay(first: str, last: str, delay_seconds: float) -> dict:
+    return _request("POST", "/monitoring/replay/start", first=first, last=last,
+                    delay_seconds=delay_seconds)
+
+
+def stop_replay() -> dict:
+    return _request("POST", "/monitoring/replay/stop")

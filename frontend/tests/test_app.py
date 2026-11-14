@@ -56,6 +56,26 @@ RESPONSES = {
         "metrics": {"summary": {"lightgbm": {"pickups_wape": 0.8, "dropoffs_wape": 0.8,
                                              "net_flow_mae": 1.2}}},
     },
+    "/monitoring": {
+        "running": True, "first": "2026-03-01T00:00", "last": "2026-09-30T20:00",
+        "clock": "2026-03-10T05:00", "delay_seconds": 0.0, "model_version": "1",
+        "profile_loaded": True, "window_days": 7, "window_size": 7,
+        "breach_days": {"drift": 3, "error": 0}, "alerting": {"drift": True, "error": False},
+        "thresholds": {"max_psi": 0.5, "relative_wape": 1.0, "sustain_days": 3}, "error": None,
+        "latest": {
+            "first_day": "2026-03-03", "last_day": "2026-03-09",
+            "errors": [{"target": target, "group": group, "label": label, "relative_wape": 0.97,
+                        "model_wape": 0.8, "baseline_wape": 0.82, "model_abs_error": 1.0,
+                        "baseline_abs_error": 1.0, "actual": 1.0, "rows": 1}
+                       for target in ("pickups", "dropoffs")
+                       for group, label in (("all", "all"), ("horizon", "1"), ("tier", "5-10"))],
+            "psi": {"trips_per_day_28d": 0.8, "pickups_forecast": 0.3},
+        },
+        "history": [{"day": f"2026-03-{day:02d}", "model_version": "1", "window_full": day >= 7,
+                     "max_psi": 0.8 if day >= 7 else None, "drift_days": max(day - 6, 0),
+                     "error_days": 0, "pickups_relative_wape": 0.97,
+                     "dropoffs_relative_wape": 1.01} for day in range(1, 10)],
+    },
 }
 
 
@@ -111,3 +131,14 @@ def test_unreachable_backend_shows_an_error(backend):
     app = AppTest.from_file(APP, default_timeout=30)
     app.run()
     assert "Cannot reach the backend" in app.error[0].value
+
+
+def test_monitoring_page_shows_signals_and_the_firing_alert():
+    app = run("views/monitoring.py")
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Drift breach days"] == "3 of 3"
+    assert metrics["Simulated time"] == "10 Mar 05:00"
+    assert any("Inputs have drifted" in warning.value for warning in app.warning)
+    assert app.dataframe[1].value["Column"].tolist() == ["trips_per_day_28d", "pickups_forecast"]
+    slices = app.dataframe[0].value.index.tolist()
+    assert slices == ["All stations", "1 hour ahead", "5-10 trips/day"]

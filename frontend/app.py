@@ -38,6 +38,7 @@ navigation = st.navigation([
     st.Page("views/alerts.py", title="Rebalancing alerts", icon=":material/warning:",
             default=True),
     st.Page("views/station.py", title="Station forecast", icon=":material/pedal_bike:"),
-    st.Page("views/pipeline.py", title="Pipeline console", icon=":material/monitoring:"),
+    st.Page("views/monitoring.py", title="Model monitoring", icon=":material/monitoring:"),
+    st.Page("views/pipeline.py", title="Pipeline console", icon=":material/settings:"),
 ])
 navigation.run()
