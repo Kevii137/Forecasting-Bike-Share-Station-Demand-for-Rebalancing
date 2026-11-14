@@ -45,3 +45,25 @@ serving:                   # Milestone 3: FastAPI service. No DVC stage reads th
   feature_workers: 4       # processes running the shared feature function
   alert_limit: 10          # stations listed per direction (Decision D1)
   min_pressure: 0.1        # list a station only if 3-hour net flow is at least 10% of capacity
+
+monitoring:                # Milestone 5, Decision D9. Thresholds are calibrated in reports/monitoring_calibration.json.
+  window_days: 7           # rolling window for error and drift
+  bins: 10                 # PSI bins, at training-window deciles
+  profile_sample_rows: 500000
+  drift_columns:           # strongest demand inputs by SHAP, plus both forecasts
+    - pickups_same_hour_8w_mean
+    - dropoffs_same_hour_8w_mean
+    - pickups_mean_24h
+    - dropoffs_mean_24h
+    - trips_per_day_28d
+    - pickups_forecast
+    - dropoffs_forecast
+  thresholds:              # calibrated 2026-11-13 (reports/monitoring_calibration.json); approved 2026-11-14
+    max_psi: 0.5           # training-window PSI reaches 2.5 within itself; replay peaks at 1.04
+    relative_wape: 1.0     # the model is no better than the historical average it falls back to
+    sustain_days: 5        # 3 days gave two false error alerts in February; 5 gave none
+
+promotion:                 # Milestone 6 promotion gate (Decision D9); approved 2026-11-14
+  tier_tolerance: 0.03     # a challenger may be at most 3% worse than the champion on any
+                           # horizon or volume tier; one model's tier WAPE ratio moves a median
+                           # 2.4-2.8% week to week

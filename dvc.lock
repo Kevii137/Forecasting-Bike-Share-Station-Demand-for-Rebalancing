@@ -229,9 +229,9 @@ stages:
       size: 771
     - path: src/bikeshare/modeling
       hash: md5
-      md5: b0a08cac482d9cb81f2357fe4707e7df.dir
-      size: 60235
-      nfiles: 16
+      md5: 51f08205b101d0b2e4233f410ee1008b.dir
+      size: 25060
+      nfiles: 9
     params:
       params.yaml:
         evaluation:
@@ -287,3 +287,113 @@ stages:
       hash: md5
       md5: cfdee6bf2e9c9706bc6f66f594c303d7
       size: 13990
+  profile:
+    cmd: PYTHONPATH=src python -m bikeshare.monitoring.profile
+    deps:
+    - path: data/processed/features
+      hash: md5
+      md5: b6dcac9441ff0664351728a275abee66.dir
+      size: 207208326
+      nfiles: 198
+    - path: reports/metrics.json
+      hash: md5
+      md5: cfdee6bf2e9c9706bc6f66f594c303d7
+      size: 13990
+    - path: src/bikeshare/monitoring/drift.py
+      hash: md5
+      md5: 689a8aee2d07675a62e5def1297338da
+      size: 2815
+    - path: src/bikeshare/monitoring/profile.py
+      hash: md5
+      md5: e4f7dd3474210c580a3f0bad883e5222
+      size: 2998
+    params:
+      params.yaml:
+        monitoring.bins: 10
+        monitoring.drift_columns:
+        - pickups_same_hour_8w_mean
+        - dropoffs_same_hour_8w_mean
+        - pickups_mean_24h
+        - dropoffs_mean_24h
+        - trips_per_day_28d
+        - pickups_forecast
+        - dropoffs_forecast
+        monitoring.profile_sample_rows: 500000
+        seed: 42
+        split.train:
+        - 2025-08
+        - 2025-12
+    outs:
+    - path: reports/reference_profile.json
+      hash: md5
+      md5: 6ba65d2a55dd57ee0680ce9b63f42865
+      size: 3518
+  calibrate:
+    cmd: PYTHONPATH=src python -m bikeshare.monitoring.calibrate
+    deps:
+    - path: data/processed/features
+      hash: md5
+      md5: b6dcac9441ff0664351728a275abee66.dir
+      size: 207208326
+      nfiles: 198
+    - path: reports/metrics.json
+      hash: md5
+      md5: cfdee6bf2e9c9706bc6f66f594c303d7
+      size: 13990
+    - path: reports/reference_profile.json
+      hash: md5
+      md5: 6ba65d2a55dd57ee0680ce9b63f42865
+      size: 3518
+    - path: src/bikeshare/monitoring/calibrate.py
+      hash: md5
+      md5: 69a57393c48da20bc4376a15ab70a65d
+      size: 9794
+    - path: src/bikeshare/monitoring/drift.py
+      hash: md5
+      md5: 689a8aee2d07675a62e5def1297338da
+      size: 2815
+    - path: src/bikeshare/monitoring/profile.py
+      hash: md5
+      md5: e4f7dd3474210c580a3f0bad883e5222
+      size: 2998
+    - path: src/bikeshare/monitoring/windows.py
+      hash: md5
+      md5: dd10da48908686f6263a73152ec4917f
+      size: 4482
+    - path: src/bikeshare/serving/forecast.py
+      hash: md5
+      md5: eca298654f8c3d5dec8edbabbda6f401
+      size: 3681
+    params:
+      params.yaml:
+        evaluation.tier_bounds:
+        - 5
+        - 10
+        - 20
+        monitoring.thresholds:
+          max_psi: 0.5
+          relative_wape: 1.0
+          sustain_days: 5
+        monitoring.window_days: 7
+        split:
+          train:
+          - 2025-08
+          - 2025-12
+          validation:
+          - 2026-01
+          - 2026-01
+          test:
+          - 2026-02
+          - 2026-02
+          replay:
+          - 2026-03
+          - 2026-09
+    outs:
+    - path: reports/monitoring_calibration.json
+      hash: md5
+      md5: dae65e82f0f2d74eec46bad8ba0cfaff
+      size: 1004907
+    - path: reports/monitoring_calibration.png
+      hash: md5
+      md5: 3d13fdef88e98b2a0ffc56dedd3ff81b
+      size: 251127

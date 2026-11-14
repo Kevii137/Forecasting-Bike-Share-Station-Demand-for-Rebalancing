@@ -102,3 +102,42 @@ stages:
     plots:
       - reports/importance.png:
           cache: false
+  profile:
+    # Logs the drift reference profile to the trained model's MLflow run (needs the server).
+    cmd: PYTHONPATH=src python -m bikeshare.monitoring.profile
+    deps:
+      - data/processed/features
+      - reports/metrics.json
+      - src/bikeshare/monitoring/drift.py
+      - src/bikeshare/monitoring/profile.py
+    params:
+      - split.train
+      - seed
+      - monitoring.bins
+      - monitoring.drift_columns
+      - monitoring.profile_sample_rows
+    outs:
+      - reports/reference_profile.json:
+          cache: false
+  calibrate:
+    cmd: PYTHONPATH=src python -m bikeshare.monitoring.calibrate
+    deps:
+      - data/processed/features
+      - reports/metrics.json
+      - reports/reference_profile.json
+      - src/bikeshare/monitoring/calibrate.py
+      - src/bikeshare/monitoring/drift.py
+      - src/bikeshare/monitoring/profile.py
+      - src/bikeshare/monitoring/windows.py
+      - src/bikeshare/serving/forecast.py
+    params:
+      - split
+      - evaluation.tier_bounds
+      - monitoring.window_days
+      - monitoring.thresholds
+    metrics:
+      - reports/monitoring_calibration.json:
+          cache: false
+    plots:
+      - reports/monitoring_calibration.png:
+          cache: false

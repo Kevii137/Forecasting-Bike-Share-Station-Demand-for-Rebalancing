@@ -8,6 +8,7 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,8 @@ from prometheus_client import (
 
 from bikeshare.config import load_params
 from bikeshare.modeling.tracking import DEFAULT_TRACKING_URI
+from bikeshare.monitoring.profile import load_profile as load_logged_profile
+from bikeshare.monitoring.replay import ReplayMonitor, Thresholds
 from bikeshare.serving.forecast import Rules, alerts, forecast_rows, station_summary
 from bikeshare.serving.model_store import ModelStore
 from bikeshare.serving.online import FeatureStore
@@ -36,7 +39,9 @@ TIMEZONE = "America/Chicago"
 REPORTS = ("data_quality", "stations", "panel", "features", "metrics")
 
 REQUESTS = Counter("bikeshare_requests_total", "HTTP requests", ["endpoint", "status"])
-LATENCY = Histogram("bikeshare_request_seconds", "HTTP request latency", ["endpoint"])
+# Buckets reach 60 s: computing a new day's features takes 15 to 35 s.
+LATENCY = Histogram("bikeshare_request_seconds", "HTTP request latency", ["endpoint"],
+                    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 40, 60))
 FORECASTS = Counter("bikeshare_station_forecasts_total", "Station forecasts served", ["source"])
 MODEL_VERSION = Gauge("bikeshare_model_version", "Registry version of the loaded champion")
 
@@ -73,10 +78,11 @@ def replay_window(params: dict) -> tuple[pd.Timestamp, pd.Timestamp]:
 
 
 def create_app(settings: Settings | None = None, features: FeatureStore | None = None,
-               models: ModelStore | None = None) -> FastAPI:
+               models: ModelStore | None = None,
+               load_profile: Callable[[str], dict | None] = load_logged_profile) -> FastAPI:
     settings = settings or Settings()
     params = load_params(Path(settings.params_path))
-    serving = params["serving"]
+    serving, monitoring = params["serving"], params["monitoring"]
     rules = Rules(
         min_trips_per_day=params["stations"]["min_trips_per_day"],
         allowed_types=tuple(params["stations"]["allowed_types"]),
@@ -94,10 +100,19 @@ def create_app(settings: Settings | None = None, features: FeatureStore | None =
         app.state.models = models or ModelStore(serving["model_name"], serving["model_alias"])
         app.state.models.refresh()
         app.state.models.poll(serving["model_poll_seconds"])
+        # Read at scrape time, so a model swapped in by the poller shows without a request.
+        MODEL_VERSION.set_function(lambda: float(app.state.models.current.version)
+                                   if app.state.models.current else float("nan"))
+        app.state.monitor = ReplayMonitor(
+            app.state.features, app.state.models, rules, settings.panel_path,
+            Thresholds(**monitoring["thresholds"]), monitoring["window_days"],
+            params["evaluation"]["tier_bounds"], load_profile,
+        )
         # Compute the default day in the background so the first page load is quick.
         threading.Thread(target=app.state.features.features_at,
                          args=(parse_origin(None),), daemon=True).start()
         yield
+        app.state.monitor.stop()
         app.state.models.stop()
         app.state.features.close()
 
@@ -117,7 +132,6 @@ def create_app(settings: Settings | None = None, features: FeatureStore | None =
         current = app.state.models.current
         if current is None:
             raise HTTPException(503, f"model not loaded: {app.state.models.last_error}")
-        MODEL_VERSION.set(float(current.version))
         return current
 
     def parse_origin(origin: str | None) -> pd.Timestamp:
@@ -235,6 +249,33 @@ def create_app(settings: Settings | None = None, features: FeatureStore | None =
             reports["metrics"] = {key: reports["metrics"].get(key) for key in
                                   ("summary", "test_rows", "lightgbm_run_id")}
         return reports
+
+    @app.get("/monitoring")
+    def monitoring_summary() -> dict:
+        """Replay status, the latest rolling window and one row per simulated day."""
+        return app.state.monitor.summary()
+
+    @app.post("/monitoring/replay/start")
+    def start_replay(first: str | None = Query(None, examples=["2026-03-01T00:00"]),
+                     last: str | None = Query(None, examples=["2026-09-30T20:00"]),
+                     delay_seconds: float = Query(0.0, ge=0, le=60)) -> dict:
+        """Advance a simulated clock hour by hour, scoring forecasts as hours are observed."""
+        loaded_model()
+        store: FeatureStore = app.state.features
+        start = parse_origin(first) if first else store.first_origin
+        end = parse_origin(last) if last else store.last_origin
+        try:
+            app.state.monitor.start(start, end, delay_seconds)
+        except RuntimeError as error:
+            raise HTTPException(409, str(error)) from error
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        return app.state.monitor.status()
+
+    @app.post("/monitoring/replay/stop")
+    def stop_replay() -> dict:
+        app.state.monitor.stop()
+        return app.state.monitor.status()
 
     @app.get("/metrics")
     def metrics() -> Response:

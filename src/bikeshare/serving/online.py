@@ -10,7 +10,7 @@ covers a whole day. Results are cached by day, which makes hourly replay cheap.
 import logging
 import threading
 from collections import OrderedDict
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor
 from multiprocessing import get_context
 
 import pandas as pd
@@ -67,6 +67,7 @@ class FeatureStore:
         self.cached_days = cached_days
         self._cache: OrderedDict[pd.Timestamp, pd.DataFrame] = OrderedDict()
         self._lock = threading.Lock()
+        self._computing: dict[pd.Timestamp, Future] = {}
         self._pool = ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn"))
         hours = pd.read_parquet(panel_path, columns=["hour"])["hour"]
         first_hour, last_hour = hours.min(), hours.max()
@@ -91,15 +92,33 @@ class FeatureStore:
         return day[day["origin_hour"] == origin].reset_index(drop=True)
 
     def day_features(self, day: pd.Timestamp) -> pd.DataFrame:
+        """Cached day features. The lock guards only the cache: a day being computed (15 to
+        30 s) does not block requests for other days, and callers wanting the same day share
+        one computation."""
         with self._lock:
             if day in self._cache:
                 self._cache.move_to_end(day)
                 return self._cache[day]
+            computing = self._computing.get(day)
+            owner = computing is None
+            if owner:
+                computing = self._computing[day] = Future()
+        if not owner:
+            return computing.result()
+        try:
             features = self._compute_day(day)
+        except BaseException as error:
+            with self._lock:
+                del self._computing[day]
+            computing.set_exception(error)
+            raise
+        with self._lock:
             self._cache[day] = features
             if len(self._cache) > self.cached_days:
                 self._cache.popitem(last=False)
-            return features
+            del self._computing[day]
+        computing.set_result(features)
+        return features
 
     def _compute_day(self, day: pd.Timestamp) -> pd.DataFrame:
         first_origin = day

@@ -1,13 +1,12 @@
 """Serving tests on a small synthetic panel, plus online/offline parity on real data."""
 from pathlib import Path
-from types import SimpleNamespace
 
 import mlflow.pyfunc
 import numpy as np
 import pandas as pd
 import pytest
-import yaml
 from fastapi.testclient import TestClient
+from helpers import ORIGIN, RULES, START, ConstantModel, FakeClient
 
 from bikeshare.features import build_features
 from bikeshare.modeling.dataset import FEATURE_COLUMNS
@@ -15,63 +14,13 @@ from bikeshare.serving.app import Settings, create_app
 from bikeshare.serving.forecast import (
     FALLBACK,
     MODEL,
-    Rules,
     alerts,
     fallback_forecast,
     forecast_rows,
     station_summary,
 )
 from bikeshare.serving.model_store import ModelStore
-from bikeshare.serving.online import HISTORY_HOURS, FeatureStore
-
-RULES = Rules(min_trips_per_day=5, allowed_types=("classic",), alert_limit=10, min_pressure=0.1)
-START = pd.Timestamp("2026-01-01")
-HOURS = HISTORY_HOURS + 24 * 5
-ORIGIN = START + pd.Timedelta(hours=HISTORY_HOURS + 24 * 2 + 8)
-
-
-class ConstantModel:
-    """Stands in for the pyfunc: a busy pickup station that is draining."""
-
-    def predict(self, frame: pd.DataFrame) -> pd.DataFrame:
-        assert list(frame.columns) == FEATURE_COLUMNS
-        assert (frame.dtypes == "float64").all()
-        return pd.DataFrame({"pickups_forecast": np.full(len(frame), 4.0),
-                             "dropoffs_forecast": np.full(len(frame), 1.0)})
-
-
-@pytest.fixture(scope="module")
-def data_dir(tmp_path_factory) -> Path:
-    """Three stations: busy classic, quiet classic, busy lightweight."""
-    root = tmp_path_factory.mktemp("serving")
-    hours = pd.date_range(START, periods=HOURS, freq="h")
-    rng = np.random.default_rng(0)
-    rates = {"busy": 1.0, "quiet": 0.05, "light": 1.0}
-    panel = pd.concat([
-        pd.DataFrame({"station_key": key, "hour": hours,
-                      "pickups": rng.poisson(rate, HOURS), "dropoffs": rng.poisson(rate, HOURS)})
-        for key, rate in rates.items()
-    ])
-    panel["month"] = panel["hour"].dt.strftime("%Y-%m")
-    panel.to_parquet(root / "panel", partition_cols=["month"])
-    pd.DataFrame({
-        "station_key": ["busy", "quiet", "light"], "lat": [41.9, 41.8, 41.7],
-        "lng": [-87.6, -87.7, -87.8], "capacity": [15.0, 11.0, np.nan],
-        "station_type": ["classic", "classic", "lightweight"],
-    }).to_parquet(root / "stations.parquet")
-    params = yaml.safe_load(Path("params.yaml").read_text())
-    params["split"]["replay"] = [f"{START:%Y-%m}", f"{hours[-1]:%Y-%m}"]
-    params["serving"]["feature_workers"] = 1
-    (root / "params.yaml").write_text(yaml.safe_dump(params))
-    return root
-
-
-@pytest.fixture(scope="module")
-def store(data_dir) -> FeatureStore:
-    store = FeatureStore(str(data_dir / "panel"), str(data_dir / "stations.parquet"),
-                         [1, 2, 3], workers=1)
-    yield store
-    store.close()
+from bikeshare.serving.online import FeatureStore
 
 
 def test_online_features_equal_build_features_on_full_history(store, data_dir):
@@ -116,17 +65,6 @@ def test_fallback_uses_shorter_averages_for_new_stations():
         "pickups_mean_168h": [9.0, 9.0, 0.5, np.nan],
     })
     assert fallback_forecast(features, "pickups").tolist() == [2.0, 3.0, 0.5, 0.0]
-
-
-class FakeClient:
-    def __init__(self):
-        self.version = "1"
-        self.fail = False
-
-    def get_model_version_by_alias(self, name, alias):
-        if self.fail:
-            raise ConnectionError("registry down")
-        return SimpleNamespace(version=self.version, run_id=f"run-{self.version}", tags={})
 
 
 def test_model_store_reloads_only_when_alias_moves(monkeypatch):
