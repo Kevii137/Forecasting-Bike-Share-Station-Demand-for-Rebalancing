@@ -72,6 +72,7 @@ stages:
     deps:
       - data/processed/features
       - src/bikeshare/modeling/tune.py
+      - src/bikeshare/modeling/boosting.py
       - src/bikeshare/modeling/dataset.py
       - src/bikeshare/modeling/metrics.py
     params:

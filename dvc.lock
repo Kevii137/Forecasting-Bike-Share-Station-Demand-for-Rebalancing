@@ -173,6 +173,10 @@ stages:
       md5: b6dcac9441ff0664351728a275abee66.dir
       size: 207208326
       nfiles: 198
+    - path: src/bikeshare/modeling/boosting.py
+      hash: md5
+      md5: df5558af371c07479b101ccdcb99365f
+      size: 1130
     - path: src/bikeshare/modeling/dataset.py
       hash: md5
       md5: 5406c1646b46fd5b84a38232b146796f
@@ -183,8 +187,8 @@ stages:
       size: 3446
     - path: src/bikeshare/modeling/tune.py
       hash: md5
-      md5: 4de432a11f955b32f57e9be259b2b4ae
-      size: 5786
+      md5: 308d24d3b4b5172567fd37287638b8ba
+      size: 4908
     params:
       params.yaml:
         model:
@@ -229,9 +233,9 @@ stages:
       size: 771
     - path: src/bikeshare/modeling
       hash: md5
-      md5: 51f08205b101d0b2e4233f410ee1008b.dir
-      size: 25060
-      nfiles: 9
+      md5: 410051886aca4809e304a9b89535e0ec.dir
+      size: 25939
+      nfiles: 12
     params:
       params.yaml:
         evaluation:

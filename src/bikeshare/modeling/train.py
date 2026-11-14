@@ -8,16 +8,14 @@ import matplotlib
 import mlflow
 import numpy as np
 import pandas as pd
-import yaml
-from mlflow.models import infer_signature
 
 from bikeshare.config import load_params
 from bikeshare.modeling.baselines import BASELINES, baseline_forecast
+from bikeshare.modeling.boosting import fit
 from bikeshare.modeling.dataset import FEATURE_COLUMNS, TARGETS, load_split
-from bikeshare.modeling.metrics import breakdown, net_flow_error
-from bikeshare.modeling.pyfunc import DemandModel
+from bikeshare.modeling.evaluation import evaluate, flatten
+from bikeshare.modeling.packaging import log_model
 from bikeshare.modeling.tracking import lineage_tags, start_tracking
-from bikeshare.modeling.tune import fit
 
 # The non-interactive backend must be selected before pyplot is imported.
 matplotlib.use("Agg")
@@ -32,32 +30,6 @@ IMPORTANCE_PATH = Path("reports/importance.json")
 IMPORTANCE_PLOT = Path("reports/importance.png")
 SHAP_SAMPLE_ROWS = 50_000
 MODEL_NAME = "lightgbm"
-
-
-def metric_key(*parts: str) -> str:
-    """MLflow metric names cannot contain '+', used in tier labels such as 20+."""
-    return "_".join(parts).replace("+", "plus")
-
-
-def flatten(prefix: str, scores: dict) -> dict[str, float]:
-    flat = {}
-    for metric, value in scores["overall"].items():
-        flat[metric_key(prefix, metric)] = value
-    for group in ("horizon", "tier", "period"):
-        for label, values in scores[group].items():
-            flat[metric_key(prefix, group, label, "wape")] = values["wape"]
-    return flat
-
-
-def evaluate(frame: pd.DataFrame, forecasts: dict[str, str], evaluation: dict) -> dict:
-    """Score one model's forecasts. forecasts maps each demand to its forecast column."""
-    result = {
-        demand: breakdown(frame, TARGETS[demand], column,
-                          evaluation["tier_bounds"], evaluation["peak_hours"])
-        for demand, column in forecasts.items()
-    }
-    result["net_flow"] = net_flow_error(frame, forecasts["pickups"], forecasts["dropoffs"])
-    return result
 
 
 def importance(boosters: dict[str, lgb.Booster], sample: pd.DataFrame) -> dict:
@@ -83,29 +55,6 @@ def plot_importance(scores: dict) -> None:
     figure.tight_layout()
     figure.savefig(IMPORTANCE_PLOT, dpi=120)
     plt.close(figure)
-
-
-def log_model(boosters: dict[str, lgb.Booster], sample: pd.DataFrame) -> None:
-    MODEL_DIR.mkdir(exist_ok=True)
-    artifacts = {}
-    for demand, booster in boosters.items():
-        path = MODEL_DIR / f"{demand}.txt"
-        booster.save_model(path, num_iteration=booster.best_iteration)
-        artifacts[demand] = str(path)
-    columns_path = MODEL_DIR / "feature_columns.json"
-    columns_path.write_text(json.dumps(FEATURE_COLUMNS))
-    artifacts["feature_columns"] = str(columns_path)
-
-    inputs = sample[FEATURE_COLUMNS].astype("float64")
-    outputs = pd.DataFrame({f"{demand}_forecast": [0.0] * len(inputs) for demand in boosters})
-    mlflow.pyfunc.log_model(
-        name="model", python_model=DemandModel(), artifacts=artifacts,
-        code_paths=["src/bikeshare"], signature=infer_signature(inputs, outputs),
-        input_example=inputs.head(3),
-        pip_requirements=[f"lightgbm=={lgb.__version__}", f"pandas=={pd.__version__}",
-                          f"numpy=={np.__version__}", f"mlflow=={mlflow.__version__}",
-                          f"pyyaml=={yaml.__version__}"],
-    )
 
 
 def main() -> None:
@@ -159,7 +108,7 @@ def main() -> None:
         plot_importance(scores)
         mlflow.log_artifact(str(IMPORTANCE_PATH))
         mlflow.log_artifact(str(IMPORTANCE_PLOT))
-        log_model(boosters, scored)
+        log_model(boosters, scored, MODEL_DIR)
         report["lightgbm_run_id"] = run.info.run_id
 
     for baseline in BASELINES:
