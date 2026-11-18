@@ -1,8 +1,8 @@
 # Forecasting Bike-Share Station Demand for Proactive Rebalancing
 
-An end-to-end AIOps pipeline that forecasts hourly pickups and drop-offs for Divvy (Chicago) stations and shows an operations dispatcher which stations need attention. DA3408 AI Operations project, IIT Madras.
+An end-to-end AIOps pipeline that forecasts hourly pickups and drop-offs for Divvy (Chicago) stations and shows an operations dispatcher which stations need attention.
 
-**Status:** data pipeline, models, serving API, frontend, monitoring (Prometheus and Grafana) and automated retraining with a promotion gate and rollback complete. The MLproject entry point and the design documents (Milestone 7) are not written yet.
+Link to video demo: https://drive.google.com/file/d/15CfgvE4EX65rRwyr3wGyN-0x7zkW3HHf/view?usp=sharing
 
 ## Quick start
 
